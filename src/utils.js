@@ -176,7 +176,7 @@ function formatRemindersList(reminders) {
     const scheduled = reminders.filter(r => r.type === 'scheduled')
     const tasks = reminders.filter(r => r.type === 'task')
     
-    // Emojis de números del 0-9 y luego usaremos formato alternativo
+    // Emojis de números del 0-9
     const numberEmojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
     
     let message = `📋 *Recordatorios (${reminders.length})*\n\n`
@@ -184,23 +184,21 @@ function formatRemindersList(reminders) {
     if (scheduled.length > 0) {
         message += '⏰ *CON FECHA*\n\n'
         
-        scheduled.forEach((r, index) => {
+        scheduled.forEach((r) => {
             const date = new Date(r.trigger_date * 1000)
             const dateStr = formatDateShort(date)
-            const emoji = index < 10 ? numberEmojis[index + 1] : `*[${index + 1}]*`
+            const emoji = r.id <= 9 ? numberEmojis[r.id] : `*[${r.id}]*`
             message += `${emoji} ${r.message}\n`
-            message += `   _📅 ${dateStr}_\n`
-            message += `   ~ID: ${r.id}~\n\n`
+            message += `   _📅 ${dateStr}_\n\n`
         })
     }
     
     if (tasks.length > 0) {
         message += '📝 *SIN FECHA*\n\n'
         
-        tasks.forEach((r, index) => {
-            const emoji = index < 10 ? numberEmojis[index + 1] : `*[${index + 1}]*`
-            message += `${emoji} ${r.message}\n`
-            message += `   ~ID: ${r.id}~\n\n`
+        tasks.forEach((r) => {
+            const emoji = r.id <= 9 ? numberEmojis[r.id] : `*[${r.id}]*`
+            message += `${emoji} ${r.message}\n\n`
         })
     }
     
