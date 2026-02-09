@@ -16,11 +16,11 @@ function parseRelativeTime(text) {
     
     // Fallback manual para patrones simples
     const patterns = [
-        { regex: /en (\d+) segundo/i, multiplier: 1000 },
-        { regex: /en (\d+) minuto/i, multiplier: 60 * 1000 },
-        { regex: /en (\d+) hora/i, multiplier: 60 * 60 * 1000 },
-        { regex: /en (\d+) d[ií]a/i, multiplier: 24 * 60 * 60 * 1000 },
-        { regex: /en (\d+) semana/i, multiplier: 7 * 24 * 60 * 60 * 1000 }
+        { regex: /(?:en\s+)?(\d+)\s+segundos?/i, multiplier: 1000 },
+        { regex: /(?:en\s+)?(\d+)\s+minutos?/i, multiplier: 60 * 1000 },
+        { regex: /(?:en\s+)?(\d+)\s+horas?/i, multiplier: 60 * 60 * 1000 },
+        { regex: /(?:en\s+)?(\d+)\s+d[ií]as?/i, multiplier: 24 * 60 * 60 * 1000 },
+        { regex: /(?:en\s+)?(\d+)\s+semanas?/i, multiplier: 7 * 24 * 60 * 60 * 1000 }
     ]
     
     for (const pattern of patterns) {
@@ -63,19 +63,43 @@ function formatDateShort(date) {
 function extractReminderFromText(text) {
     // Patrones para detectar recordatorios
     const patterns = [
-        /recu[ée]rdame\s+(.+?)\s+(en|el)\s+(.+)/i,
-        /recu[ée]rdame\s+(.+)/i,
-        /no\s+olvides?\s+(.+)/i,
-        /importante\s*[:.]?\s*(.+)/i
+        // 1. Estándar: "Recuérdame comprar leche en 10 minutos"
+        /(?:recu[ée]rdame|no olvides|acu[ée]rdate|av[íi]same)\s+(?:que|de)?\s*(.+?)\s+(?:en|el|dentro de)\s+(.+)/i,
+        
+        // 2. Inverso: "En 10 minutos recuérdame comprar leche"
+        /(?:en|el|dentro de)\s+(.+?)\s+(?:recu[ée]rdame|no olvides|av[íi]same)\s+(?:que|de)?\s*(.+)/i,
+        
+        // 3. Simple con tiempo al final: "Comprar leche en 10 minutos porfa" (requiere palabras clave de recordatorio en algún lado o ser muy explícito)
+        /(?:recu[ée]rdame|no olvides|av[íi]same)\s+(.+)/i,
+        
+        // 4. "Tengo que X en Y" (experimental)
+        /tengo que\s+(.+?)\s+(?:en|el|dentro de)\s+(.+)/i
     ]
     
     for (const pattern of patterns) {
         const match = text.match(pattern)
         if (match) {
+            // Identificar qué grupo es mensaje y qué grupo es tiempo
+            // Esto depende del regex. 
+            // Para el patrón 2 (Inverso), match[1] es tiempo, match[2] es mensaje.
+            // Para el patrón 1 (Estándar), match[1] es mensaje, match[2] es tiempo.
+            
+            let message, timeExpression
+            
+            if (pattern.source.startsWith('(?:en|el|dentro de)')) {
+                // Caso inverso
+                timeExpression = match[1].trim()
+                message = match[2].trim()
+            } else {
+                // Caso estándar
+                message = match[1].trim()
+                timeExpression = match[2] ? match[2].trim() : null // Puede ser null en caso 3
+            }
+
             return {
                 found: true,
-                message: match[1].trim(),
-                timeExpression: match[3] ? match[3].trim() : null
+                message: message,
+                timeExpression: timeExpression
             }
         }
     }

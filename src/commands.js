@@ -27,15 +27,22 @@ async function processCommand(message, chatId, client) {
                 return handleModelo(args)
                 
             case 'whitelist':
+            case 'lista':
+            case 'w':
+            case 'l':
                 return handleWhitelist(args)
                 
             case 'recordar':
                 return handleRecordar(args, chatId)
                 
             case 'tarea':
+            case 'tareas':
+            case 't':
                 return handleTarea(args, chatId)
                 
             case 'recordatorios':
+            case 'tareas': // Alias
+            case 't': // Alias
                 return handleListarRecordatorios(chatId)
                 
             case 'completar':
@@ -46,9 +53,16 @@ async function processCommand(message, chatId, client) {
                 
             case 'fecha':
                 return handleAgregarFecha(args, chatId)
+
+            case 'limpiar':
+                return handleLimpiar(chatId)
+
+            case 'stats':
+                return handleStats()
                 
             case 'ayuda':
             case 'help':
+            case 'menu': // Alias
                 return showHelp()
                 
             default:
@@ -281,6 +295,24 @@ function handleAgregarFecha(args, chatId) {
     } catch (error) {
         return `❌ ${error.message}`
     }
+}
+
+function handleLimpiar(chatId) {
+    const deleted = database.clearConversationHistory(chatId)
+    if (deleted > 0) {
+        return '🧹 *Memoria borrada*\n\nHe olvidado nuestra conversación anterior. ¿De qué quieres hablar?'
+    } else {
+        return '🧹 La memoria ya estaba vacía.'
+    }
+}
+
+function handleStats() {
+    const stats = database.getStats()
+    return `📊 *Estadísticas del Bot*
+    
+💬 Mensajes totales: ${stats.totalMessages}
+📅 Recordatorios pendientes: ${stats.totalReminders}
+👥 Usuarios en whitelist: ${stats.whitelistCount}`
 }
 
 // ========== AYUDA ==========

@@ -1,208 +1,120 @@
-Para copiar tu repositorio de Git directamente desde la Raspberry Pi a tu PC personal usando SSH, debes ejecutar el comando de **clonación** desde la terminal de tu **PC** (no desde la Raspberry).
+# 🤖 WhatsApp Bot "Leslye" con IA y Recordatorios
 
-Como ya inicializaste el repositorio en la Pi (`git init`, `git add`, `git commit`), el asistente ya es un "servidor" de Git listo para ser copiado.
+Este es un bot avanzado de WhatsApp que utiliza Inteligencia Artificial (Ollama) local para conversar y un sistema robusto de recordatorios y tareas. Funciona tanto en Windows como en Linux (Raspberry Pi/Servidores).
 
-Aquí tienes los pasos exactos:
+## ✨ Características Principales
 
-### 1. Preparar la ruta en tu PC
+### 🧠 Inteligencia Artificial
 
-Abre la terminal de tu computadora (PowerShell en Windows, o Terminal en macOS/Linux) y navega hasta la carpeta donde quieras guardar el proyecto:
+- **Conversación Natural:** Utiliza modelos locales (como Gemma 3, Llama 3) vía Ollama.
+- **Memoria de Contexto:** Recuerda los últimos mensajes de la conversación para mantener el hilo.
+- **Personalidad Configurable:** Puedes definir quién es, cómo habla y su nombre.
+
+### 📅 Sistema de Recordatorios Inteligentes
+
+Detecta automáticamente intenciones de recordatorio en tu lenguaje natural.
+
+- **Ejemplos:**
+  - "Recuérdame sacar la basura mañana a las 8am"
+  - "Avísame en 30 minutos apagar la estufa"
+  - "No olvides la cita con el médico el viernes"
+- **Gestión Manual:** Comandos para crear, listar y borrar recordatorios.
+
+### 🛠️ Comandos y Herramientas
+
+- **Whitelist:** Sistema de seguridad para que solo números autorizados puedan usar el bot.
+- **Persistencia:** Base de datos SQLite para guardar conversaciones, configuración y tareas de forma segura.
+- **Multi-plataforma:** Se adapta automáticamente a Windows o Linux.
+
+## 🚀 Guía de Instalación y Uso
+
+### Requisitos Previos
+
+1. **Node.js** (v18 o superior)
+2. **Ollama** instalado y corriendo ([ollama.com](https://ollama.com))
+3. **Google Chrome** instalado
+
+### 1. Instalación
+
+Clona el repositorio e instala las dependencias:
 
 ```bash
-cd Documents
-mkdir proyectos
-cd proyectos
-
+git clone <URL_DEL_REPO>
+cd wa-bot
+npm install
 ```
 
-### 2. Ejecutar el comando de clonación (SSH)
+### 2. Configuración de IA (Ollama)
 
-Usa el siguiente comando sustituyendo `<IP_DE_TU_PI>` por la dirección IP real de tu Raspberry:
-
-```bash
-git clone baco@<IP_DE_TU_PI>:/home/baco/wa-bot
-
-```
-
-- **¿Qué hace este comando?** Se conecta por SSH a tu Pi, busca la carpeta del bot y descarga **solo** los archivos que Git está rastreando (ignorando automáticamente la carpeta pesada `node_modules` y tus sesiones privadas si creaste el `.gitignore`).
-
-### 3. Ponerlo a funcionar en tu PC
-
-Una vez que termine de descargarse, entra en la carpeta en tu PC e instala todo con un solo comando:
-
-1. **Entrar a la carpeta:** `cd wa-bot`
-2. **Instalar librerías:** `npm install` (esto descargará automáticamente todas las dependencias listadas en tu `package.json`).
-3. **Configurar archivos:** Crea los archivos `whitelist.json` y `config.json` (puedes copiar el contenido que ya tenías en la Pi).
-4. **Lanzar el bot:** `node index.js`.
-
-### ¿Por qué este es el mejor método?
-
-Al usar `git clone` en lugar de una copia normal (como `scp` o un USB):
-
-- **Limpieza:** No copias basura técnica ni archivos temporales del navegador.
-- **Sincronización:** Si haces una mejora en tu PC, puedes hacer un `git commit` y luego en la Raspberry Pi simplemente escribir `git pull` para recibir la actualización sin tener que borrar y volver a instalar todo.
-
-**Nota importante:** Recuerda que para que el bot funcione en tu PC, también debes tener **Ollama** instalado localmente con el modelo `gemma3:1b` descargado (`ollama pull gemma3:1b`) y haber creado el modelo personalizado con el comando `ollama create leslye -f Modelfile`.
-
-Sí, funciona de forma muy similar, pero hay **tres diferencias clave** en Windows que debes ajustar para que no te dé errores. La ventaja es que, si usas el código "híbrido" que te daré, el mismo proyecto funcionará en ambos sin cambiar nada manualmente.
-
-Aquí tienes los ajustes necesarios para correrlo en Windows:
-
-### 1. Cambios en el código (`index.js`)
-
-Windows usa rutas de archivos distintas para el navegador. Debemos decirle al bot que detecte en qué sistema operativo está.
-
-Modifica la sección de `puppeteer` en tu `index.js` por esta:
-
-```javascript
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    // Detecta si es Windows (win32) o la Raspberry (Linux)
-    executablePath:
-      process.platform === "win32"
-        ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-        : "/usr/bin/chromium",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  },
-});
-```
-
-_Nota: Asegúrate de tener instalado **Google Chrome** normal en tu Windows._
-
-### 2. Instalación de Herramientas en Windows
-
-En Windows no usas `sudo apt`, sino instaladores normales:
-
-1. **Ollama:** Descarga el `.exe` desde [ollama.com](https://ollama.com) e instálalo.
-2. **Node.js:** Descarga la versión LTS desde [nodejs.org](https://nodejs.org).
-3. **Modelos:** Abre una terminal (PowerShell) y corre los mismos comandos:
-
-- `ollama pull gemma3:1b`.
-- `ollama create leslye -f Modelfile` (esto crea tu versión con memoria optimizada en el PC).
-
-### 3. Autoinicio con PM2 (Diferente en Windows)
-
-En la Raspberry Pi usaste `pm2 startup`, pero en Windows ese comando no funciona igual. Para que el bot se encienda solo al prender tu PC, necesitas un paquete extra:
-
-1. **Instalar el asistente de inicio para Windows:**
-
-```powershell
-npm install -g pm2-windows-startup
-
-```
-
-2. **Configurarlo:**
-
-```powershell
-pm2-startup install
-
-```
-
-3. **Guardar tus procesos:**
-
-```powershell
-pm2 save
-
-```
-
-### Diferencias de rendimiento
-
-- **Velocidad:** En tu PC personal, Gemma 3:1b responderá mucho más rápido que en la Raspberry Pi 4B porque el procesador de tu computadora suele ser más potente.
-- **Interfaz:** En Windows, Ollama suele mostrar un icono en la barra de tareas (junto al reloj). Asegúrate de que esté abierto antes de lanzar el bot.
-- **Keep Alive:** El parámetro `keep_alive: -1` sigue siendo muy útil en Windows para que el modelo no se descargue de la memoria RAM y siempre responda al instante.
-
-**Resumen:** Puedes copiar tu carpeta `wa-bot` al PC, hacer `npm install`, y con el pequeño cambio de `executablePath` en el código, el bot correrá exactamente igual que en la Raspberry.
-
-Para ejecutar tu asistente en Windows ahora que tienes el código "dinámico", solo necesitas seguir estos pasos en tu terminal (PowerShell o CMD). Esta guía asume que ya tienes el código en una carpeta de tu PC.
-
-### 1. Preparar el "Cerebro" (Ollama)
-
-Antes de lanzar el bot, la IA debe estar lista en tu computadora local.
-
-1. **Instala Ollama:** Descárgalo de [ollama.com](https://ollama.com) e instálalo como cualquier programa de Windows.
-2. **Descarga el modelo base:** Abre una terminal y escribe:
+Asegúrate de tener el modelo base y crear el personalizado:
 
 ```bash
 ollama pull gemma3:1b
-
-```
-
-3. **Crea tu modelo personalizado:** Asegúrate de estar dentro de la carpeta `wa-bot` y ejecuta:
-
-```bash
 ollama create leslye -f Modelfile
-
 ```
 
-_Esto cargará la configuración de Leslye (ventana de contexto de 4096) en tu PC._
+> **Nota:** Puedes usar otros modelos editando el código, pero `leslye` es el predeterminado.
 
-### 2. Instalar las dependencias de Node.js
+### 3. Ejecución
 
-Como Git no copia la carpeta `node_modules` (porque la pusimos en `.gitignore`), debes descargar las librerías en tu PC:
-
-1. En la terminal, entra a la carpeta del proyecto:
+#### Modo Desarrollo (con logs en pantalla)
 
 ```bash
-cd "C:\Ruta\A\Tu\Carpeta\wa-bot"
-
+npm run dev
 ```
 
-2. Instala todo con este comando:
+La primera vez te pedirá escanear un código QR con tu WhatsApp. Luego verás los logs de mensajes y errores en tiempo real.
+
+#### Modo Producción (24/7 en segundo plano)
 
 ```bash
-npm install
-
+npm run start
 ```
 
-### 3. Crear los archivos de configuración
+Usa `pm2` para mantener el bot activo incluso si cierras la terminal.
 
-Git tampoco copió tus archivos `.json` personales. Debes crearlos manualmente o renombrar los ejemplos:
+- `npm run stop`: Detener el bot
+- `npm run restart`: Reiniciar el bot (útil tras cambios)
 
-1. **Whitelist:** Crea `whitelist.json` y pega tu número: `["5213321082748@c.us"]`.
-2. **Configuración:** Crea `config.json` con este contenido inicial:
+### 4. Gestión de Usuarios (Whitelist)
 
-```json
-{
-  "nombre": "",
-  "personalidad": ""
-}
-```
+Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comandos en la terminal:
 
-### 4. ¡Ejecutar!
+- **Listar usuarios:** `npm run whitelist list`
+- **Agregar usuario:** `npm run whitelist add 521xxxxxxxx@c.us`
+- **Eliminar usuario:** `npm run whitelist remove 521xxxxxxxx@c.us`
 
-Ahora simplemente lanza el bot con Node:
+### 5. Configuración Inicial (Wizard)
+
+Puedes configurar el nombre y personalidad del bot interactivamente:
 
 ```bash
-node index.js
-
+npm run init
 ```
 
-**¿Qué pasará en Windows?**
+## 🔧 Comandos del Bot (En WhatsApp)
 
-- Se abrirá automáticamente una ventana de **Google Chrome**.
-- Verás la página de WhatsApp Web cargando.
-- **Escanea el código QR** con tu celular (Configuración > Dispositivos vinculados).
-- Una vez vinculado, verás en la terminal el mensaje: `Esperando configuración inicial...`.
+Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 
-### 5. Configuración final vía WhatsApp
+| Comando        | Descripción                                                        |
+| -------------- | ------------------------------------------------------------------ |
+| `/menu`        | Muestra la lista de comandos disponibles                           |
+| `/tareas`      | Lista tus recordatorios pendientes                                 |
+| `/borrar [ID]` | Elimina una tarea específica                                       |
+| `/limpiar`     | Borra el historial de conversación con la IA (reinicio de memoria) |
+| `/stats`       | Muestra estadísticas del sistema (admin)                           |
 
-Escríbele a tu bot desde tu número personal:
+## 📂 Estructura del Proyecto
 
-1. **Primer mensaje:** Pon el nombre que quieras (ej: _"Siri"_).
-2. **Segundo mensaje:** Pon su personalidad (ej: _"Eres un experto en cocina"_).
-3. **A partir de ahí:** Ya puedes hablarle normal. Verás que en WhatsApp aparece **"Escribiendo..."** mientras tu PC procesa la respuesta.
+- `index.js`: Punto de entrada principal. Maneja la conexión de WhatsApp.
+- `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, config).
+- `src/ai-processor.js`: Lógica para interactuar con Ollama y detectar recordatorios.
+- `src/reminders.js`: Motor de cron y gestión de fechas para recordatorios.
+- `src/commands.js`: Procesador de comandos explícitos (`/`).
+- `scripts/`: Herramientas de utilidad (init, migrate, whitelist-cli).
 
-### Bonus: Ejecutarlo 24/7 en Windows (PM2)
+## 🐛 Solución de Problemas Comunes
 
-Si quieres que el bot corra en segundo plano sin tener la terminal abierta:
-
-1. Instala PM2: `npm install -g pm2`
-2. Instala el soporte para inicio de Windows: `npm install -g pm2-windows-startup`
-3. Configura el inicio: `pm2-startup install`
-4. Lanza el bot: `pm2 start index.js --name leslye-bot`
-5. Guarda el estado: `pm2 save`
-
-**Nota:** Como en Windows el código detecta `esWindows`, la ventana de Chrome se abrirá al inicio. Si ya escaneaste el QR y no quieres verla más, puedes cambiar manualmente en el código `headless: esWindows? false : true` a `headless: true` temporalmente.
-
-pm2 delete nergal-bot && pm2 start index.js --name leslye-bot && pm2 save
+- **El bot no responde:** Verifica que Ollama esté corriendo (`ollama list` en terminal).
+- **QR no carga:** Si la terminal no muestra el QR correctamente, intenta agrandar la ventana o usa `npm run qr` para limpiar sesión y reintentar.
+- **Error "Browser already running":** Ejecuta `npm run stop` para matar procesos zombies de Chrome.

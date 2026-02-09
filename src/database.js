@@ -205,6 +205,20 @@ function getAllReminders(chatId, includeCompleted = false) {
     return stmt.all(chatId)
 }
 
+function getLastCompletedReminder(chatId) {
+    // Obtener el último recordatorio completado en los últimos 30 minutos
+    // (Para evitar posponer algo de hace días accidentalmente)
+    const limitParams = Math.floor(Date.now() / 1000) - (30 * 60) // 30 mins atrás
+    
+    const stmt = db.prepare(`
+        SELECT * FROM reminders 
+        WHERE chat_id = ? AND status = 'completed' AND trigger_date > ? 
+        ORDER BY trigger_date DESC 
+        LIMIT 1
+    `)
+    return stmt.get(chatId, limitParams)
+}
+
 function updateReminderStatus(id, status) {
     const stmt = db.prepare('UPDATE reminders SET status = ? WHERE id = ?')
     const result = stmt.run(status, id)
@@ -258,6 +272,7 @@ module.exports = {
     getAllWhitelist,
     saveMessage,
     getRecentMessages,
+    getConversationHistory: getRecentMessages, // Alias para compatibilidad
     clearConversationHistory,
     createReminder,
     getPendingReminders,
@@ -265,5 +280,6 @@ module.exports = {
     updateReminderStatus,
     addDateToTask,
     deleteReminder,
+    getLastCompletedReminder,
     getStats
 }

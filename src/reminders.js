@@ -8,37 +8,68 @@ function initReminders(whatsappClient) {
     client = whatsappClient
     console.log('⏰ Iniciando sistema de recordatorios...')
     
-    // Verificar recordatorios cada minuto
-    reminderCheckInterval = setInterval(checkReminders, 60 * 1000)
+    // Verificar recordatorios cada 10 segundos para debug
+    reminderCheckInterval = setInterval(checkReminders, 10 * 1000)
     
-    console.log('✅ Sistema de recordatorios activo')
+    console.log('✅ Sistema de recordatorios activo (Check cada 10s)')
 }
 
 async function checkReminders() {
     try {
         const pendingReminders = database.getPendingReminders()
         
+        if (pendingReminders.length > 0) {
+            console.log(`🔍 Encontrados ${pendingReminders.length} recordatorios pendientes de envío.`)
+        }
+
         for (const reminder of pendingReminders) {
+            console.log(`⚡ Procesando recordatorio ID ${reminder.id}...`)
             await sendReminder(reminder)
             database.updateReminderStatus(reminder.id, 'completed')
+            console.log(`🏁 Recordatorio ID ${reminder.id} marcado como completado.`)
         }
     } catch (error) {
         console.error('❌ Error verificando recordatorios:', error)
     }
 }
 
+const aiProcessor = require('./ai-processor') // Importar AI Processor
+
+// ...
+
 async function sendReminder(reminder) {
     if (!client) {
-        console.error('❌ Cliente de WhatsApp no inicializado')
+        console.error('❌ CRÍTICO: Cliente de WhatsApp es NULL en sendReminder')
         return
     }
     
+    console.log(`📤 Procesando envío de recordatorio a ${reminder.chat_id}...`)
+    
+    let messageToSend = `🔔 *RECORDATORIO*\n\n${reminder.message}`
+    
     try {
-        const message = `🔔 *RECORDATORIO*\n\n${reminder.message}`
-        await client.sendMessage(reminder.chat_id, message)
-        console.log(`✅ Recordatorio enviado a ${reminder.chat_id}`)
+        // Intentar humanizar el mensaje
+        const personality = database.getConfig('personalidad') || 'Eres un asistente útil.'
+        const humanized = await aiProcessor.humanizeReminder(reminder.message, personality)
+        
+        messageToSend = `🔔 *RECORDATORIO*\n\n${humanized}`
+        
     } catch (error) {
-        console.error('❌ Error enviando recordatorio:', error)
+        console.error('⚠️ Falló la humanización, enviando original:', error)
+    }
+    
+    try {
+        const chat = await client.getChatById(reminder.chat_id)
+        if (chat) {
+            await chat.sendMessage(messageToSend)
+            console.log(`✅ Recordatorio enviado exitosamente a ${reminder.chat_id}`)
+        } else {
+            console.log(`⚠️ Chat ${reminder.chat_id} no encontrado con getChatById, intentando envío directo...`)
+            await client.sendMessage(reminder.chat_id, messageToSend)
+            console.log(`✅ Recordatorio enviado directo a ${reminder.chat_id}`)
+        }
+    } catch (error) {
+        console.error(`❌ FALLÓ envío de recordatorio a ${reminder.chat_id}:`, error)
     }
 }
 
