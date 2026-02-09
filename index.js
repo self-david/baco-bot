@@ -1,120 +1,163 @@
-const qrcode = require('qrcode-terminal');
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const ollama = require('ollama').default; // Fix para evitar TypeError
-const schedule = require('node-schedule');
-const fs = require('fs');
+const qrcode = require('qrcode-terminal')
+const { Client, LocalAuth } = require('whatsapp-web.js')
+const database = require('./src/database')
+const reminders = require('./src/reminders')
+const commands = require('./src/commands')
+const aiProcessor = require('./src/ai-processor')
 
-// Rutas de archivos persistentes
-const WHITELIST_FILE = './whitelist.json';
-const CONFIG_FILE = './config.json';
-const MEMORIA_FILE = './memoria.json';
+// Detectar sistema operativo
+const esWindows = process.platform === 'win32'
 
-// Carga inicial de datos desde archivos
-let whitelist = JSON.parse(fs.readFileSync(WHITELIST_FILE, 'utf-8'));
-let config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-let chatMemory = fs.existsSync(MEMORIA_FILE)? JSON.parse(fs.readFileSync(MEMORIA_FILE, 'utf-8')) : {};
+// Detectar modo de configuración
+const esModoSetup = process.env.SETUP_MODE ? process.env.SETUP_MODE.trim() === 'true' : false
+
+// Inicializar base de datos
+database.initDatabase()
+
+// Validación de sesión para modo normal
+if (!esModoSetup && !require('fs').existsSync('./.wwebjs_auth')) {
+    console.error('\n❌ ERROR: No se encontró una sesión activa.')
+    console.error('👉 Por favor, ejecuta primero: npm run qr\n')
+    process.exit(1)
+}
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        executablePath: '/usr/bin/chromium', 
+        headless: true,
+        executablePath: esWindows 
+           ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' 
+            : '/usr/bin/chromium',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
-});
+})
 
-function guardar(file, data) { fs.writeFileSync(file, JSON.stringify(data, null, 2)); }
+// ========== EVENTOS DEL CLIENTE ==========
 
-client.on('qr', qr => qrcode.generate(qr, {small: true}));
+client.on('qr', qr => {
+    if (esModoSetup) {
+        console.log('Sigue los pasos para vincular tu cuenta:')
+        qrcode.generate(qr, {small: true})
+    }
+})
+
+client.on('loading_screen', (percent, message) => {
+    console.log(`⏳ Cargando: ${percent}% - ${message}`)
+})
+
+client.on('authenticated', () => {
+    console.log('✅ Autenticación exitosa')
+})
+
+client.on('auth_failure', msg => {
+    console.error('❌ Error de autenticación:', msg)
+})
+
+client.on('disconnected', (reason) => {
+    console.log('🔌 Cliente desconectado:', reason)
+    reminders.stopReminders()
+})
+
+client.on('change_state', state => {
+    console.log('🔄 Estado del cliente:', state)
+})
 
 client.on('ready', () => {
-    console.log(config.nombre? `¡${config.nombre} está activo!` : 'Esperando configuración inicial vía WhatsApp...');
-});
+    if (esModoSetup) {
+        console.log('\n✅ ¡Vinculación exitosa!')
+        console.log('Ahora puedes cerrar esta terminal y usar: npm run dev\n')
+        setTimeout(() => process.exit(0), 2000)
+    } else {
+        const nombre = database.getConfig('nombre')
+        console.log(nombre ? `¡${nombre} está activo!` : '⚠️  Bot activo - Usa npm run init para configurar')
+        
+        // Iniciar sistema de recordatorios
+        reminders.initReminders(client)
+    }
+})
+
+// ========== MANEJO DE MENSAJES ==========
 
 client.on('message_create', async message => {
-    if (message.fromMe) return;
-    const chatId = message.from;
+    const chatId = message.from
+    const texto = message.body.trim()
 
-    // 1. Validar Whitelist (Seguridad)
-    if (!whitelist.includes(chatId)) return;
+    console.log(`📩 Mensaje recibido de ${chatId}: ${texto}`)
 
-    const chat = await message.getChat();
-    const texto = message.body.trim();
-
-    // 2. COMANDOS DE AJUSTE (/nombre y /personalidad)
-    if (texto.startsWith('/nombre ')) {
-        config.nombre = texto.replace('/nombre ', '').trim();
-        guardar(CONFIG_FILE, config);
-        return message.reply(`✅ Nombre cambiado. Ahora me llamo: ${config.nombre}`);
+    // 1. Validar Whitelist
+    if (!database.isInWhitelist(chatId)) {
+        console.log(`⚠️  Ignorando mensaje: ${chatId} no está en la whitelist`)
+        return
     }
 
-    if (texto.startsWith('/personalidad ')) {
-        config.personalidad = texto.replace('/personalidad ', '').trim();
-        guardar(CONFIG_FILE, config);
-        return message.reply(`✅ Personalidad actualizada: "${config.personalidad}"`);
+    const chat = await message.getChat()
+
+    // 2. Procesamiento de Comandos
+    const commandResult = await commands.processCommand(message, chatId, client)
+    if (commandResult) {
+        return message.reply(commandResult)
     }
 
-    // 3. CONFIGURACIÓN INICIAL (Si el bot no tiene nombre ni personalidad)
-    if (!config.nombre) {
-        config.nombre = texto;
-        guardar(CONFIG_FILE, config);
-        return message.reply(`¡Hola! Desde ahora mi nombre es *${config.nombre}*. \n\nAhora dime: ¿Qué personalidad quieres que tenga? (Ej: "Eres un asistente sarcástico", "Eres un experto en leyes")`);
-    }
-
-    if (!config.personalidad) {
-        config.personalidad = texto;
-        guardar(CONFIG_FILE, config);
-        return message.reply(`Entendido. Mi personalidad es: "${config.personalidad}". \n\n¡Configuración completa! Ya puedes hablarme de lo que quieras.`);
-    }
-
-    // 4. INICIALIZAR MEMORIA (Lista de mensajes)
-    if (!chatMemory[chatId]) {
-        chatMemory[chatId] = []; // Los corchetes van AQUÍ
-    }
-
-    // 5. RECORDATORIOS PROACTIVOS (Ej: "recuérdame en 60") 
-    if (texto.toLowerCase().includes('recuérdame en')) {
-        const segundos = parseInt(texto.match(/\d+/));
-        if (segundos) {
-            const fecha = new Date(Date.now() + segundos * 1000);
-            schedule.scheduleJob(fecha, () => {
-                client.sendMessage(chatId, `🔔 RECORDATORIO PROACTIVO: Soy ${config.nombre}, el tiempo terminó.`);
-            });
-            return message.reply(`Vale, te avisaré en ${segundos} segundos.`);
+    // 3. Verificar intención explícita de recordatorio
+    const reminderIntent = aiProcessor.analyzeReminderIntent(texto)
+    if (reminderIntent.isReminder) {
+        try {
+            const result = reminders.createReminder(
+                chatId, 
+                reminderIntent.message, 
+                reminderIntent.timeExpression
+            )
+            
+            if (result.type === 'scheduled') {
+                const utils = require('./src/utils')
+                return message.reply(`✅ Recordatorio creado\n\n📅 ${utils.formatDate(result.triggerDate)}\n🆔 ID: ${result.id}`)
+            } else {
+                return message.reply(`✅ Tarea creada\n\n🆔 ID: ${result.id}\n\n💡 Usa /fecha ${result.id} [fecha] para agregar fecha`)
+            }
+        } catch (error) {
+            return message.reply(`❌ ${error.message}`)
         }
     }
 
-    // 6. RESPUESTA CON IA + INDICADOR "ESCRIBIENDO..."
+    // 4. Generar respuesta con IA
     try {
-        await chat.sendStateTyping(); // Muestra "Escribiendo..." en WhatsApp 
-
-        chatMemory[chatId].push({ role: 'user', content: texto });
+        await chat.sendStateTyping()
         
-        // Sliding Window: Recordar 8 mensajes para no saturar los 8GB de la Pi 4 [3, 4]
-        if (chatMemory[chatId].length > 8) chatMemory[chatId].shift();
-
-        // Construir prompt con personalidad e historial
-        const promptMessages =[
-            { role: 'system', content: config.personalidad },
-           ...chatMemory[chatId]
-	];
-
-        const response = await ollama.chat({
-            model: 'nergal', // El nombre que creaste con el Modelfile
-            messages: promptMessages,
-            keep_alive: -1 // Mantiene el modelo en RAM para velocidad 
-        });
-
-        const replyIA = response.message.content;
-        chatMemory[chatId].push({ role: 'assistant', content: replyIA });
+        const modelo = database.getConfig('modelo') || 'Leslye'
+        const personalidad = database.getConfig('personalidad') || 'Eres un asistente útil y amigable'
         
-        // Guardar memoria en el archivo JSON [5]
-        guardar(MEMORIA_FILE, chatMemory);
+        const response = await aiProcessor.generateResponse(chatId, texto, personalidad, modelo)
         
-        await client.sendMessage(chatId, replyIA);
-
+        // 5. Detectar si es un contexto importante para sugerir recordatorio
+        if (aiProcessor.detectImportantContext(texto, response)) {
+            await client.sendMessage(chatId, response)
+            return message.reply('💡 ¿Quieres que te lo recuerde? Responde con /recordar [mensaje] en [fecha/tiempo]')
+        }
+        
+        await client.sendMessage(chatId, response)
+        
     } catch (error) {
-        console.error("Error en Ollama:", error);
+        console.error('❌ Error procesando mensaje:', error)
+        await client.sendMessage(chatId, '❌ Hubo un error procesando tu mensaje. Verifica que Ollama esté corriendo.')
     }
-});
+})
 
-client.initialize();
+// ========== LIMPIEZA AL SALIR ==========
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 Deteniendo bot...')
+    reminders.stopReminders()
+    client.destroy()
+    process.exit(0)
+})
+
+process.on('SIGTERM', () => {
+    console.log('\n🛑 Deteniendo bot...')
+    reminders.stopReminders()
+    client.destroy()
+    process.exit(0)
+})
+
+// Iniciar cliente
+console.log('🚀 Iniciando cliente...')
+client.initialize()
