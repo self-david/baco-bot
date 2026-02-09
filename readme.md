@@ -39,7 +39,7 @@ Detecta automáticamente intenciones de recordatorio en tu lenguaje natural.
 Clona el repositorio e instala las dependencias:
 
 ```bash
-git clone <URL_DEL_REPO>
+git clone https://github.com/self-david/baco-bot.git
 cd baco-bot
 npm install
 ```
