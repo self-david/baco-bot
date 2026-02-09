@@ -162,6 +162,25 @@ function addDateToTask(taskId, dateString, chatId) {
     }
 }
 
+function updateReminderDate(reminderId, dateString, chatId) {
+    const triggerDate = utils.parseRelativeTime(dateString)
+    
+    if (!triggerDate) {
+        throw new Error('No pude entender la fecha/tiempo especificado')
+    }
+    
+    const success = database.updateReminderDate(reminderId, triggerDate)
+    
+    if (!success) {
+        throw new Error('No se pudo actualizar el recordatorio. Verifica que el ID sea correcto')
+    }
+    
+    return {
+        triggerDate,
+        formatted: utils.formatDate(triggerDate)
+    }
+}
+
 function stopReminders() {
     if (reminderCheckInterval) {
         clearInterval(reminderCheckInterval)
@@ -178,5 +197,6 @@ module.exports = {
     completeReminder,
     cancelReminder,
     addDateToTask,
+    updateReminderDate,
     stopReminders
 }

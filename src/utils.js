@@ -172,32 +172,49 @@ function formatRemindersList(reminders) {
         return '📋 No tienes recordatorios pendientes'
     }
     
-    let message = `📋 *Recordatorios Pendientes (${reminders.length})*\n\n`
-    
     // Separar por tipo
     const scheduled = reminders.filter(r => r.type === 'scheduled')
     const tasks = reminders.filter(r => r.type === 'task')
     
+    let message = `📋 *Recordatorios Pendientes (${reminders.length})*\n\n`
+    
     if (scheduled.length > 0) {
         message += '*⏰ Con fecha:*\n'
-        scheduled.forEach((r, index) => {
+        message += '┌────┬──────────────────────────────────┬─────────────────┐\n'
+        message += '│ ID │ Tarea                            │ Fecha           │\n'
+        message += '├────┼──────────────────────────────────┼─────────────────┤\n'
+        
+        scheduled.forEach((r) => {
             const date = new Date(r.trigger_date * 1000)
-            message += `${index + 1}. ${r.message}\n`
-            message += `   📅 ${formatDateShort(date)}\n`
-            message += `   ID: ${r.id}\n\n`
+            const dateStr = formatDateShort(date)
+            const taskText = r.message.length > 32 ? r.message.substring(0, 29) + '...' : r.message
+            const idStr = String(r.id).padEnd(2)
+            const taskPadded = taskText.padEnd(32)
+            const datePadded = dateStr.padEnd(15)
+            message += `│ ${idStr} │ ${taskPadded} │ ${datePadded} │\n`
         })
+        
+        message += '└────┴──────────────────────────────────┴─────────────────┘\n\n'
     }
     
     if (tasks.length > 0) {
         message += '*📝 Tareas pendientes:*\n'
-        tasks.forEach((r, index) => {
-            message += `${index + 1}. ${r.message}\n`
-            message += `   ID: ${r.id}\n\n`
+        message += '┌────┬──────────────────────────────────────────────────────┐\n'
+        message += '│ ID │ Tarea                                                │\n'
+        message += '├────┼──────────────────────────────────────────────────────┤\n'
+        
+        tasks.forEach((r) => {
+            const taskText = r.message.length > 52 ? r.message.substring(0, 49) + '...' : r.message
+            const idStr = String(r.id).padEnd(2)
+            const taskPadded = taskText.padEnd(52)
+            message += `│ ${idStr} │ ${taskPadded} │\n`
         })
+        
+        message += '└────┴──────────────────────────────────────────────────────┘\n\n'
     }
     
     message += '\n💡 Usa /completar [ID] para marcar como hecho'
-    message += '\n💡 Usa /fecha [ID] [fecha] para agregar fecha a una tarea'
+    message += '\n💡 Usa /fecha [ID] [fecha] para agregar/modificar fecha'
     
     return message
 }

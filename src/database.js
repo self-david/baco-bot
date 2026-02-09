@@ -323,6 +323,17 @@ function addDateToTask(id, triggerDate) {
     return result.changes > 0
 }
 
+function updateReminderDate(id, triggerDate) {
+    const timestamp = Math.floor(triggerDate.getTime() / 1000)
+    const stmt = db.prepare(`
+        UPDATE reminders 
+        SET trigger_date = ?, type = 'scheduled' 
+        WHERE id = ?
+    `)
+    const result = stmt.run(timestamp, id)
+    return result.changes > 0
+}
+
 function deleteReminder(id) {
     const stmt = db.prepare('DELETE FROM reminders WHERE id = ?')
     const result = stmt.run(id)
@@ -423,8 +434,7 @@ module.exports = {
     getAllReminders,
     updateReminderStatus,
     addDateToTask,
-    deleteReminder,
-    getLastCompletedReminder,
+    updateReminderDate,
     deleteReminder,
     getLastCompletedReminder,
     saveMemory,

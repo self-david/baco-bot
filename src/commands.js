@@ -388,8 +388,15 @@ function handleAgregarFecha(args, chatId) {
     const dateString = args.slice(1).join(' ')
     
     try {
-        const result = reminders.addDateToTask(id, dateString, chatId)
-        return `✅ Fecha agregada al recordatorio #${id}\n\n📅 ${result.formatted}`
+        // Primero intentar actualizar (funciona para cualquier recordatorio)
+        try {
+            const result = reminders.updateReminderDate(id, dateString, chatId)
+            return `✅ Fecha modificada del recordatorio #${id}\n\n📅 ${result.formatted}`
+        } catch (updateError) {
+            // Si falla updateReminderDate, intentar addDateToTask (por compatibilidad)
+            const result = reminders.addDateToTask(id, dateString, chatId)
+            return `✅ Fecha agregada al recordatorio #${id}\n\n📅 ${result.formatted}`
+        }
     } catch (error) {
         return `❌ ${error.message}`
     }
