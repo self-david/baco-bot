@@ -135,6 +135,14 @@ async function humanizeReminder(text, personality, model = 'Leslye') {
 async function analyzePostponeIntent(text, lastReminder, model = 'Leslye') {
     if (!lastReminder) return { isPostpone: false }
 
+    // FILTRO RÁPIDO: Si el mensaje no tiene palabras clave de tiempo o posposición, ignorar
+    // Esto evita que "hola" o "gracias" active la IA innecesariamente
+    const postponeKeywords = ['posponer', 'luego', 'después', 'mañana', 'minutos', 'horas', 'días', 'semana', 'tarde', 'noche', 'recuérdame', 'otra vez', 'más tarde', 'mueve', 'cambia']
+    const hasKeyword = postponeKeywords.some(kw => text.toLowerCase().includes(kw))
+    
+    // Si no tiene keywords explícitas Y es muy corto (< 10 caracteres), ignorar
+    if (!hasKeyword && text.length < 10) return { isPostpone: false }
+
     const now = new Date()
     const context = `
     Fecha actual: ${now.toLocaleDateString('es-MX')}
