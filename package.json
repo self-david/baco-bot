@@ -7,7 +7,7 @@
     "dev": "node index.js",
     "start": "node scripts/pm2-manager.js start",
     "stop": "node scripts/pm2-manager.js stop",
-    "qr": "node cleanup.js && set SETUP_MODE=true&& node index.js",
+    "qr": "node cleanup.js && cross-env SETUP_MODE=true node index.js",
     "init": "node scripts/init.js",
     "migrate": "node scripts/migrate-to-db.js",
     "whitelist": "node scripts/whitelist-cli.js"
@@ -24,6 +24,7 @@
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "chrono-node": "^2.7.8",
+    "cross-env": "^10.1.0",
     "fuse.js": "^7.1.0",
     "inquirer": "^8.2.6",
     "node-schedule": "^2.1.1",

@@ -3,3 +3,7 @@ node_modules/
 .wwebjs_cache/
 memoria.json
 whitelist.json
+
+bot.db
+bot.db-shm
+bot.db-wal
