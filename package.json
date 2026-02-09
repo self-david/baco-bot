@@ -4,7 +4,7 @@
   "description": "Bot de WhatsApp con IA y recordatorios inteligentes",
   "main": "index.js",
   "bin": {
-    "baco-bot ": "bin/asistente.js"
+    "baco-bot": "bin/asistente.js"
   },
   "scripts": {
     "dev": "node index.js",
