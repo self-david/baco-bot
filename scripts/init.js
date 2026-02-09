@@ -137,7 +137,7 @@ async function main() {
                 {
                     type: 'input',
                     name: 'numero',
-                    message: '📱 Número de WhatsApp (formato: 5213321082748@c.us o solo 5213321082748):',
+                    message: '📱 Número de WhatsApp (formato: 521xxxxxxxxxx@c.us o solo 521xxxxxxxxxx):',
                     validate: input => {
                         if (!input.trim()) return 'El número no puede estar vacío'
                         return true

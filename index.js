@@ -133,18 +133,17 @@ client.on('message_create', async message => {
 
     console.log(`📩 Mensaje recibido de ${chatId}: ${texto}`)
 
-    // 1. Validar Whitelist
-    if (!database.isInWhitelist(chatId)) {
-        console.log(`⚠️  Ignorando mensaje: ${chatId} no está en la whitelist`)
-        return
-    }
-
-    // const chat = await message.getChat() // No siempre necesario y puede ser lento
-
-    // 2. Procesamiento de Comandos
+    // 2. Procesamiento de Comandos (Antes de whitelist para permitir /activar)
     const commandResult = await commands.processCommand(message, chatId, client)
     if (commandResult) {
         return message.reply(commandResult)
+    }
+
+    // 1. Validar Whitelist (Después de verificar comandos habilitados para todos)
+    if (!database.isInWhitelist(chatId)) {
+        console.log(`⚠️  Ignorando mensaje: ${chatId} no está en la whitelist`)
+        // Opcional: Responder solo la primera vez o si no es comando
+        return message.reply('❌ No tienes acceso a este bot. Usa */generar* para solicitar un código de acceso y envíaselo a un administrador.')
     }
 
     // 2.5 Verificar si es una petición para posponer el último recordatorio (IA)

@@ -19,11 +19,32 @@ function initDatabase() {
         )
     `)
 
-    // Tabla de whitelist
+    // Tabla de whitelist (actualizada con roles)
     db.exec(`
         CREATE TABLE IF NOT EXISTS whitelist (
             phone_number TEXT PRIMARY KEY,
+            role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
             added_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )
+    `)
+
+    // Migración para bases de datos existentes: agregar columna role si no existe
+    try {
+        db.exec('ALTER TABLE whitelist ADD COLUMN role TEXT NOT NULL DEFAULT "user" CHECK(role IN ("admin", "user"))')
+        console.log('   ℹ️  Columna "role" agregada a whitelist')
+    } catch (e) {
+        // Ignorar si la columna ya existe
+    }
+
+    // Tabla de códigos de activación
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS activation_codes (
+            code TEXT PRIMARY KEY,
+            created_by TEXT,
+            is_used INTEGER DEFAULT 0,
+            used_by TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            used_at INTEGER
         )
     `)
 
@@ -139,8 +160,54 @@ function removeFromWhitelist(phoneNumber) {
 }
 
 function getAllWhitelist() {
-    const stmt = db.prepare('SELECT phone_number, added_at FROM whitelist ORDER BY added_at DESC')
+    const stmt = db.prepare('SELECT phone_number, role, added_at FROM whitelist ORDER BY added_at DESC')
     return stmt.all()
+}
+
+function isAdmin(phoneNumber) {
+    const stmt = db.prepare('SELECT role FROM whitelist WHERE phone_number = ?')
+    const row = stmt.get(phoneNumber)
+    return row ? row.role === 'admin' : false
+}
+
+function promoteToAdmin(phoneNumber) {
+    const stmt = db.prepare("UPDATE whitelist SET role = 'admin' WHERE phone_number = ?")
+    const result = stmt.run(phoneNumber)
+    // Si no está en la whitelist, lo agregamos como admin directamente
+    if (result.changes === 0) {
+        const insert = db.prepare("INSERT INTO whitelist (phone_number, role) VALUES (?, 'admin')")
+        insert.run(phoneNumber)
+        return true
+    }
+    return result.changes > 0
+}
+
+// ========== CÓDIGOS DE ACTIVACIÓN ==========
+
+function createActivationCode(creatorId) {
+    // Generar código aleatorio de 6 caracteres (mayúsculas y números)
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const stmt = db.prepare('INSERT INTO activation_codes (code, created_by) VALUES (?, ?)')
+    stmt.run(code, creatorId)
+    return code
+}
+
+function validateActivationCode(code) {
+    const stmt = db.prepare('SELECT * FROM activation_codes WHERE code = ? AND is_used = 0')
+    return stmt.get(code.toUpperCase())
+}
+
+function useActivationCode(code, adminId) {
+    const dbCode = validateActivationCode(code)
+    if (!dbCode) return null
+
+    const stmt = db.prepare(`
+        UPDATE activation_codes 
+        SET is_used = 1, used_by = ?, used_at = (strftime('%s', 'now'))
+        WHERE code = ? AND is_used = 0
+    `)
+    const result = stmt.run(adminId, code.toUpperCase())
+    return result.changes > 0 ? dbCode.created_by : null
 }
 
 // ========== CONVERSACIONES ==========
@@ -366,5 +433,10 @@ module.exports = {
     updateMemory,
     deleteMemory,
     countMemories,
-    getStats
+    getStats,
+    isAdmin,
+    promoteToAdmin,
+    createActivationCode,
+    validateActivationCode,
+    useActivationCode
 }

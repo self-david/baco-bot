@@ -83,6 +83,7 @@ Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comando
 - **Listar usuarios:** `npm run whitelist list`
 - **Agregar usuario:** `npm run whitelist add 521xxxxxxxx@c.us`
 - **Eliminar usuario:** `npm run whitelist remove 521xxxxxxxx@c.us`
+- **Promover a Administrador:** `node scripts/set-admin.js 521xxxxxxxx@c.us`
 
 ### 5. Configuración Inicial (Wizard)
 
@@ -103,6 +104,11 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 | `/borrar [ID]` | Elimina una tarea específica                                       |
 | `/limpiar`     | Borra el historial de conversación con la IA (reinicio de memoria) |
 | `/stats`       | Muestra estadísticas del sistema (admin)                           |
+| `/generar`     | Solicita un código de acceso (público)                             |
+| `/activar [C]` | Activa a un usuario usando su código de solicitud (admin)          |
+| `/inactivar`   | Remueve el acceso de un usuario (admin)                            |
+
+> **Nota:** Los comandos marcados como `(admin)` requieren que el usuario tenga el rol de administrador. Usa `node scripts/set-admin.js` para asignarlo.
 
 ## 📂 Estructura del Proyecto
 

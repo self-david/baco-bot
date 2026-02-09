@@ -28,6 +28,9 @@ async function processCommand(message, chatId, client) {
             'memoria', 'memorias',
             'olvidar',
             'stats',
+            'activar',
+            'generar',
+            'inactivar',
             'ayuda', 'help', 'menu'
         ]
 
@@ -102,10 +105,21 @@ async function processCommand(message, chatId, client) {
             case 'stats':
                 return handleStats()
                 
+            case 'activar':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador para activar usuarios.'
+                return handleActivar(args, chatId, client)
+
+            case 'generar':
+                return handleGenerar(chatId)
+
+            case 'inactivar':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
+                return handleInactivar(args)
+
             case 'ayuda':
             case 'help':
             case 'menu': // Alias
-                return showHelp()
+                return showHelp(chatId)
                 
             default:
                 // Si llegamos aquí es porque ni el fuzzy match encontró algo decente
@@ -167,7 +181,11 @@ function handleModelo(args) {
 
 // ========== COMANDOS DE WHITELIST ==========
 
-function handleWhitelist(args) {
+function handleWhitelist(args, chatId) {
+    if (!database.isAdmin(chatId)) {
+        return '⛔ Acceso denegado. Se requiere rol de administrador.'
+    }
+
     const subcommand = args[0]
     
     if (!subcommand) {
@@ -178,7 +196,7 @@ function handleWhitelist(args) {
         case 'add':
             const numeroAdd = args[1]
             if (!numeroAdd) {
-                return '❌ Debes proporcionar un número\n\nEjemplo: /whitelist add 5213321082748@c.us'
+                return '❌ Debes proporcionar un número\n\nEjemplo: /whitelist add 521xxxxxxxxxx@c.us'
             }
             
             const formattedAdd = utils.formatPhoneNumber(numeroAdd)
@@ -358,21 +376,66 @@ function handleStats() {
 👥 Usuarios en whitelist: ${stats.whitelistCount}`
 }
 
+// ========== ACTIVACIÓN Y ROLES ==========
+
+function handleActivar(args, chatId, client) {
+    if (args.length === 0) {
+        return '🔑 Para activar a un usuario, usa:\n/activar [codigo]'
+    }
+
+    const code = args[0]
+    const requesterId = database.useActivationCode(code, chatId)
+
+    if (!requesterId) {
+        return '❌ Código inválido, ya utilizado o no existe.'
+    }
+
+    if (database.addToWhitelist(requesterId)) {
+        // Intentar notificar al usuario (opcional, si logramos obtener el chat)
+        client.sendMessage(requesterId, '✨ ¡Tu cuenta ha sido ACTIVADA por un administrador! ✨\n\nYa puedes usar todas las funciones del bot.')
+        return `✅ Usuario ${requesterId} activado correctamente.`
+    }
+
+    return '⚠️ El usuario ya estaba en la whitelist, pero el código fue marcado como usado.'
+}
+
+function handleGenerar(chatId) {
+    if (database.isInWhitelist(chatId)) {
+        return '✅ Ya tienes acceso al sistema. No necesitas generar un código.'
+    }
+
+    const code = database.createActivationCode(chatId)
+    return `🔑 *Tu código de solicitud:* ${code}\n\nEnvía este código a un administrador para que active tu acceso.`
+}
+
+function handleInactivar(args) {
+    if (args.length === 0) {
+        return '❌ Debes proporcionar el número a inactivar.'
+    }
+
+    const numero = utils.formatPhoneNumber(args[0])
+
+    if (database.removeFromWhitelist(numero)) {
+        return `✅ Usuario ${numero} ha sido inactivado y removido de la whitelist.`
+    } else {
+        return `⚠️ El usuario ${numero} no estaba activo.`
+    }
+}
+
 // ========== AYUDA ==========
 
-function showHelp() {
-    return `📚 *Comandos Disponibles*
+function showHelp(chatId) {
+    const isAdmin = database.isAdmin(chatId)
+    
+    let help = `📚 *Comandos Disponibles*
 
-*Configuración:*
-/nombre [nombre] - Cambiar mi nombre
-/personalidad [texto] - Cambiar personalidad
-/refinar [instrucciones] - Refinar personalidad
-/modelo [nombre] - Cambiar modelo de IA
-
-*Whitelist:*
-/whitelist add [número] - Agregar usuario
-/whitelist remove [número] - Quitar usuario
-/whitelist list - Ver usuarios autorizados
+*General:*
+/menu - Ver este menú
+/tareas - Ver tus pendientes
+/borrar [ID] - Eliminar una tarea
+/limpiar - Reiniciar conversación IA
+/memoria - Ver lo que sé de ti
+/generar - Solicitar código de acceso
 
 *Recordatorios:*
 /recordar [mensaje] en [tiempo] - Crear recordatorio
@@ -387,6 +450,24 @@ function showHelp() {
 /recordar Reunión el 15 de marzo a las 10am
 /tarea Revisar documentos
 /fecha 3 mañana a las 9am`
+
+    if (isAdmin) {
+        help += `
+
+*Administración (ADMIN):*
+/activar [código] - Activar a un solicitante
+/inactivar [número] - Quitar acceso
+/stats - Estadísticas generales
+/whitelist [add/remove/list] - Gestión de usuarios
+
+*Configuración (ADMIN):*
+/nombre [nombre] - Cambiar nombre del bot
+/personalidad [texto] - Cambiar personalidad
+/refinar [texto] - Ajustar personalidad
+/modelo [nombre] - Cambiar modelo de Ollama`
+    }
+
+    return help
 }
 
 function handleMemoria(chatId) {

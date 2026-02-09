@@ -14,7 +14,7 @@ function showHelp() {
     console.log('  npm run whitelist remove <número>  - Quitar usuario')
     console.log('  npm run whitelist list             - Listar todos\n')
     console.log('Ejemplo:')
-    console.log('  npm run whitelist add 5213321082748@c.us')
+    console.log('  npm run whitelist add 521XXXXXXXXXX@c.us')
 }
 
 function formatPhoneNumber(number) {
@@ -47,7 +47,7 @@ switch (command) {
         
         if (!validatePhoneNumber(formattedNumber)) {
             console.error('❌ Error: Número de teléfono inválido')
-            console.log('Formato esperado: 5213321082748@c.us o 5213321082748')
+            console.log('Formato esperado: 521XXXXXXXXXX@c.us o 521XXXXXXXXXX')
             process.exit(1)
         }
         

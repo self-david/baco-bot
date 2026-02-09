@@ -1,6 +1,8 @@
-const ollama = require('ollama').default
+const { Ollama } = require('ollama')
 const database = require('./database')
 const utils = require('./utils')
+
+const ollama = new Ollama({ host: 'http://127.0.0.1:11434' })
 
 async function generateResponse(chatId, userMessage, personality, model = 'Leslye') {
     try {
