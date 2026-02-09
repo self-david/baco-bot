@@ -176,45 +176,36 @@ function formatRemindersList(reminders) {
     const scheduled = reminders.filter(r => r.type === 'scheduled')
     const tasks = reminders.filter(r => r.type === 'task')
     
-    let message = `📋 *Recordatorios Pendientes (${reminders.length})*\n\n`
+    // Emojis de números del 0-9 y luego usaremos formato alternativo
+    const numberEmojis = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+    
+    let message = `📋 *Recordatorios (${reminders.length})*\n\n`
     
     if (scheduled.length > 0) {
-        message += '*⏰ Con fecha:*\n'
-        message += '┌────┬──────────────────────────────────┬─────────────────┐\n'
-        message += '│ ID │ Tarea                            │ Fecha           │\n'
-        message += '├────┼──────────────────────────────────┼─────────────────┤\n'
+        message += '⏰ *CON FECHA*\n\n'
         
-        scheduled.forEach((r) => {
+        scheduled.forEach((r, index) => {
             const date = new Date(r.trigger_date * 1000)
             const dateStr = formatDateShort(date)
-            const taskText = r.message.length > 32 ? r.message.substring(0, 29) + '...' : r.message
-            const idStr = String(r.id).padEnd(2)
-            const taskPadded = taskText.padEnd(32)
-            const datePadded = dateStr.padEnd(15)
-            message += `│ ${idStr} │ ${taskPadded} │ ${datePadded} │\n`
+            const emoji = index < 10 ? numberEmojis[index + 1] : `*[${index + 1}]*`
+            message += `${emoji} ${r.message}\n`
+            message += `   _📅 ${dateStr}_\n`
+            message += `   ~ID: ${r.id}~\n\n`
         })
-        
-        message += '└────┴──────────────────────────────────┴─────────────────┘\n\n'
     }
     
     if (tasks.length > 0) {
-        message += '*📝 Tareas pendientes:*\n'
-        message += '┌────┬──────────────────────────────────────────────────────┐\n'
-        message += '│ ID │ Tarea                                                │\n'
-        message += '├────┼──────────────────────────────────────────────────────┤\n'
+        message += '📝 *SIN FECHA*\n\n'
         
-        tasks.forEach((r) => {
-            const taskText = r.message.length > 52 ? r.message.substring(0, 49) + '...' : r.message
-            const idStr = String(r.id).padEnd(2)
-            const taskPadded = taskText.padEnd(52)
-            message += `│ ${idStr} │ ${taskPadded} │\n`
+        tasks.forEach((r, index) => {
+            const emoji = index < 10 ? numberEmojis[index + 1] : `*[${index + 1}]*`
+            message += `${emoji} ${r.message}\n`
+            message += `   ~ID: ${r.id}~\n\n`
         })
-        
-        message += '└────┴──────────────────────────────────────────────────────┘\n\n'
     }
     
-    message += '\n💡 Usa /completar [ID] para marcar como hecho'
-    message += '\n💡 Usa /fecha [ID] [fecha] para agregar/modificar fecha'
+    message += '💡 _Usa /completar [ID] para marcar como hecho_\n'
+    message += '💡 _Usa /fecha [ID] [fecha] para agregar/modificar fecha_'
     
     return message
 }
