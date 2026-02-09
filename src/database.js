@@ -125,7 +125,7 @@ function addToWhitelist(phoneNumber) {
         stmt.run(phoneNumber)
         return true
     } catch (error) {
-        if (error.code === 'SQLITE_CONSTRAINT') {
+        if (error.code === 'SQLITE_CONSTRAINT' || error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
             return false // Ya existe
         }
         throw error
