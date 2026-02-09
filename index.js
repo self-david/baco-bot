@@ -191,11 +191,12 @@ client.on('message_create', async message => {
 
     // 4. Integración con Ollama (Solo si no es comando ni recordatorio)
     try {
-        // Obtener personalidad configurada
+        // Obtener personalidad y modelo configurados
         const personality = database.getConfig('personalidad') || 'Eres un asistente útil y amigable llamado Leslye.'
+        const model = database.getConfig('modelo') || 'Leslye'
         
-        // Generar respuesta (generateResponse ya maneja el historial internamente)
-        const response = await aiProcessor.generateResponse(chatId, texto, personality)
+        // Generar respuesta
+        const response = await aiProcessor.generateResponse(chatId, texto, personality, model)
         
         // generateResponse ya guarda los mensajes en la DB, no necesitamos guardarlos aquí explícitamente doble
         // pero validamos si la implementación de generateResponse lo hace (sí lo hace en línea 8 y 29 de ai-processor.js)
