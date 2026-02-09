@@ -127,5 +127,5 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 ## 🐛 Solución de Problemas Comunes
 
 - **El bot no responde:** Verifica que Ollama esté corriendo (`ollama list` en terminal).
-- **QR no carga:** Si la terminal no muestra el QR correctamente, intenta agrandar la ventana o usa `npm run qr` para limpiar sesión y reintentar.
-- **Error "Browser already running":** Ejecuta `npm run stop` para matar procesos zombies de Chrome.
+- **QR no carga:** Si la terminal no muestra el QR correctamente, intenta agrandar la ventana o usa `baco-bot qr` para limpiar sesión y reintentar.
+- **Error "Browser already running":** Ejecuta `baco-bot stop` para matar procesos zombies de Chrome.
