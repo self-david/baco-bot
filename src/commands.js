@@ -54,22 +54,27 @@ async function processCommand(message, chatId, client) {
 
         switch (commandToExecute) {
             case 'nombre':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return handleNombre(args)
                 
             case 'personalidad':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return handlePersonalidad(args)
                 
             case 'refinar':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return handleRefinar(args)
                 
             case 'modelo':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return handleModelo(args)
                 
             case 'whitelist':
             case 'lista':
             case 'w':
             case 'l':
-                return handleWhitelist(args)
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
+                return handleWhitelist(args, chatId)
                 
             case 'recordar':
                 return handleRecordar(args, chatId)
@@ -103,6 +108,7 @@ async function processCommand(message, chatId, client) {
                 return handleOlvidar(args, chatId)
 
             case 'stats':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return handleStats()
                 
             case 'activar':
