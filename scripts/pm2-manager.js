@@ -1,5 +1,7 @@
 const { execSync } = require('child_process')
 const path = require('path')
+const database = require('../src/database')
+const aiProcessor = require('../src/ai-processor')
 
 const args = process.argv.slice(2)
 const command = args[0]
@@ -46,7 +48,7 @@ function start() {
         console.log('  pm2 list          - Ver estado')
         console.log('  pm2 logs wa-bot   - Ver logs')
         console.log('  pm2 monit         - Monitor interactivo')
-        console.log('  npm run stop      - Detener bot\n')
+        console.log(' baco-bot stop      - Detener bot\n')
         
     } catch (error) {
         console.error('❌ Error iniciando bot:', error.message)
@@ -54,8 +56,16 @@ function start() {
     }
 }
 
-function stop() {
-    console.log('🛑 Deteniendo bot...')
+async function stop() {
+    process.stdout.write('🛑 Deteniendo bot...')
+    
+    // Inicializar DB para obtener el modelo actual
+    database.initDatabase()
+    const currentModel = database.getConfig('modelo')
+    if (currentModel) {
+        await aiProcessor.unloadModel(currentModel).catch(() => {})
+    }
+    console.log(' OK')
     
     // Intentar detener con PM2 primero
     if (checkPM2Installed()) {

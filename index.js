@@ -18,7 +18,7 @@ database.initDatabase()
 // Validación de sesión para modo normal
 if (!esModoSetup && !fs.existsSync('./.wwebjs_auth')) {
     console.error('\n❌ ERROR: No se encontró una sesión activa.')
-    console.error('👉 Por favor, ejecuta primero: npm run qr\n')
+    console.error('👉 Por favor, ejecuta primero: baco-bot qr\n')
     process.exit(1)
 }
 
@@ -106,7 +106,7 @@ client.on('qr', qr => {
         qrcode.generate(qr, { small: true })
     } else {
         console.log('\n⚠️  Se requiere escanear nuevo código QR')
-        console.log('Por favor ejecuta: npm run qr\n')
+        console.log('Por favor ejecuta:baco-bot qr\n')
         client.destroy()
         process.exit(1)
     }
@@ -116,7 +116,7 @@ client.on('ready', () => {
     console.log('\n🎉 ¡BOT LISTO!')
     
     const nombre = database.getConfig('nombre')
-    console.log(nombre ? `¡${nombre} está activo!` : '⚠️  Bot activo - Usa npm run init para configurar')
+    console.log(nombre ? `¡${nombre} está activo!` : '⚠️  Bot activo - Usabaco-bot init para configurar')
     
     // Iniciar sistema de recordatorios
     reminders.initReminders(client)
@@ -131,6 +131,9 @@ client.on('message_create', async message => {
     const chatId = message.from
     const texto = message.body.trim()
 
+    // Ignorar grupos (@g.us)
+    if (chatId.endsWith('@g.us')) return
+
     console.log(`📩 Mensaje recibido de ${chatId}: ${texto}`)
 
     // 2. Procesamiento de Comandos (Antes de whitelist para permitir /activar)
@@ -142,14 +145,18 @@ client.on('message_create', async message => {
     // 1. Validar Whitelist (Después de verificar comandos habilitados para todos)
     if (!database.isInWhitelist(chatId)) {
         console.log(`⚠️  Ignorando mensaje: ${chatId} no está en la whitelist`)
-        // Opcional: Responder solo la primera vez o si no es comando
-        return message.reply('❌ No tienes acceso a este bot. Usa */generar* para solicitar un código de acceso y envíaselo a un administrador.')
+        // Responder solo en chat directo
+        if (chatId.endsWith('@c.us') || chatId.endsWith('@lid')) {
+            return message.reply('❌ No tienes acceso a este bot. Usa */generar* para solicitar un código de acceso y envíaselo a un administrador.')
+        }
+        return
     }
 
     // 2.5 Verificar si es una petición para posponer el último recordatorio (IA)
     const lastReminder = database.getLastCompletedReminder(chatId)
     if (lastReminder && !texto.startsWith('/')) {
-        const model = database.getConfig('modelo') || 'Leslye'
+        const model = database.getConfig('modelo')
+        if (!model) return console.error('❌ Error: No hay modelo configurado')
         const postponeIntent = await aiProcessor.analyzePostponeIntent(texto, lastReminder, model)
         if (postponeIntent.isPostpone) {
             try {
@@ -192,8 +199,13 @@ client.on('message_create', async message => {
     // 4. Integración con Ollama (Solo si no es comando ni recordatorio)
     try {
         // Obtener personalidad y modelo configurados
-        const personality = database.getConfig('personalidad') || 'Eres un asistente útil y amigable llamado Leslye.'
-        const model = database.getConfig('modelo') || 'Leslye'
+        const personality = database.getConfig('personalidad') || 'Eres un asistente útil y amigable.'
+        const model = database.getConfig('modelo')
+        
+        if (!model) {
+            console.error('❌ Error: No hay modelo configurado')
+            return message.reply('❌ No tengo ningún modelo de IA configurado. Por favor, usa */modelo [nombre]* (ej: /modelo gemma3:1b) para empezar.')
+        }
         
         // Generar respuesta
         const response = await aiProcessor.generateResponse(chatId, texto, personality, model)
@@ -203,7 +215,7 @@ client.on('message_create', async message => {
         
         return message.reply(response).then(() => {
             // 5. Procesar memoria en segundo plano (Fire and forget)
-            aiProcessor.processMemory(chatId, texto, response)
+            aiProcessor.processMemory(chatId, texto, response, model)
                 .catch(err => console.error('Error procesando memoria:', err))
         })
     } catch (error) {
@@ -228,15 +240,23 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Promesa rechazada no manejada:', reason)
 })
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     console.log('\n🛑 Deteniendo bot (SIGINT)...')
+    const currentModel = database.getConfig('modelo')
+    if (currentModel) {
+        await aiProcessor.unloadModel(currentModel).catch(() => {})
+    }
     reminders.stopReminders()
     client.destroy()
     process.exit(0)
 })
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     console.log('\n🛑 Deteniendo bot (SIGTERM)...')
+    const currentModel = database.getConfig('modelo')
+    if (currentModel) {
+        await aiProcessor.unloadModel(currentModel).catch(() => {})
+    }
     reminders.stopReminders()
     client.destroy()
     process.exit(0)

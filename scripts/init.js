@@ -183,7 +183,7 @@ async function main() {
         ])
         
         if (vincular) {
-            console.log('\n🔗 Ejecuta: npm run qr')
+            console.log('\n🔗 Ejecuta:baco-bot qr')
             console.log('Luego escanea el código QR con tu celular\n')
         }
     } else {
@@ -201,9 +201,9 @@ async function main() {
     
     console.log('\n✨ Configuración completada!')
     console.log('\n📝 Próximos pasos:')
-    console.log('   1. npm run qr       - Vincular WhatsApp (si aún no lo has hecho)')
-    console.log('   2. npm run dev      - Ejecutar bot en modo desarrollo')
-    console.log('   3. npm run start    - Ejecutar bot en segundo plano')
+    console.log('   1.baco-bot qr       - Vincular WhatsApp (si aún no lo has hecho)')
+    console.log('   2.baco-bot dev      - Ejecutar bot en modo desarrollo')
+    console.log('   3.baco-bot start    - Ejecutar bot en segundo plano')
     console.log('')
 }
 

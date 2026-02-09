@@ -4,7 +4,12 @@ const utils = require('./utils')
 
 const ollama = new Ollama({ host: 'http://127.0.0.1:11434' })
 
-async function generateResponse(chatId, userMessage, personality, model = 'Leslye') {
+const OLLAMA_OPTIONS = {
+    num_ctx: 4096,
+    temperature: 0.7
+}
+
+async function generateResponse(chatId, userMessage, personality, model) {
     try {
         // Guardar mensaje del usuario
         database.saveMessage(chatId, 'user', userMessage)
@@ -36,7 +41,8 @@ async function generateResponse(chatId, userMessage, personality, model = 'Lesly
         const response = await ollama.chat({
             model: model,
             messages: promptMessages,
-            keep_alive: -1
+            keep_alive: '10m',
+            options: OLLAMA_OPTIONS
         })
         
         const replyIA = response.message.content
@@ -114,7 +120,7 @@ function detectImportantContext(userMessage, aiResponse) {
     return hasImportantKeywords && hasDates
 }
 
-async function humanizeReminder(text, personality, model = 'Leslye') {
+async function humanizeReminder(text, personality, model) {
     try {
         const prompt = [
             { role: 'system', content: `${personality}\n\nTU TAREA: Tienes un recordatorio: "${text}". Reescríbelo como un mensaje directo de WhatsApp para el usuario. Sé breve, natural y usa tu personalidad (sarcasmo/humor negro si aplica). NO uses prefijos como "Claro" o "Aquí tienes". Solo el mensaje.` },
@@ -124,7 +130,8 @@ async function humanizeReminder(text, personality, model = 'Leslye') {
         const response = await ollama.chat({
             model: model,
             messages: prompt,
-            keep_alive: -1
+            keep_alive: '10m',
+            options: OLLAMA_OPTIONS
         })
         
         return response.message.content.replace(/^["']|["']$/g, '') // Quitar comillas si las pone
@@ -134,7 +141,7 @@ async function humanizeReminder(text, personality, model = 'Leslye') {
     }
 }
 
-async function analyzePostponeIntent(text, lastReminder, model = 'Leslye') {
+async function analyzePostponeIntent(text, lastReminder, model) {
     if (!lastReminder) return { isPostpone: false }
 
     // FILTRO RÁPIDO: Si el mensaje no tiene palabras clave de tiempo o posposición, ignorar
@@ -162,8 +169,9 @@ async function analyzePostponeIntent(text, lastReminder, model = 'Leslye') {
         const response = await ollama.chat({
             model: model,
             messages: prompt,
-            format: 'json', // Forzar JSON mode (si el modelo lo soporta, si no el prompt ayuda)
-            keep_alive: -1
+            format: 'json', 
+            keep_alive: '10m',
+            options: OLLAMA_OPTIONS
         })
         
         const result = JSON.parse(response.message.content)
@@ -194,7 +202,7 @@ ${memoryList}
 [FIN MEMORIA]`
 }
 
-async function processMemory(chatId, userMessage, assistantResponse, model = 'Leslye') {
+async function processMemory(chatId, userMessage, assistantResponse, model) {
     // 1. Filtrado rápido: Si es muy corto o es un comando, ignorar
     if (userMessage.length < 5 || userMessage.startsWith('/')) return
     
@@ -213,7 +221,8 @@ async function processMemory(chatId, userMessage, assistantResponse, model = 'Le
             model: model,
             messages: prompt,
             format: 'json',
-            keep_alive: -1
+            keep_alive: '10m',
+            options: OLLAMA_OPTIONS
         })
         
         const result = JSON.parse(response.message.content)
@@ -232,11 +241,42 @@ async function processMemory(chatId, userMessage, assistantResponse, model = 'Le
     }
 }
 
+/**
+ * Descarga un modelo de la memoria de Ollama inmediatamente
+ */
+async function unloadModel(modelName) {
+    if (!modelName) return
+    try {
+        console.log(`\n🧹 Descargando modelo de memoria: ${modelName}`)
+        await ollama.chat({
+            model: modelName,
+            messages: [],
+            keep_alive: 0
+        })
+        return true
+    } catch (error) {
+        console.error(`\n❌ Error descargando modelo ${modelName}:`, error)
+        return false
+    }
+}
+
+async function listOllamaModels() {
+    try {
+        const response = await ollama.list()
+        return response.models.map(m => m.name)
+    } catch (error) {
+        console.error('❌ Error listando modelos de Ollama:', error)
+        return []
+    }
+}
+
 module.exports = {
     generateResponse,
     analyzeReminderIntent,
     detectImportantContext,
     humanizeReminder,
     analyzePostponeIntent,
-    processMemory
+    processMemory,
+    listOllamaModels,
+    unloadModel
 }

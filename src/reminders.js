@@ -50,9 +50,12 @@ async function sendReminder(reminder) {
     try {
         // Intentar humanizar el mensaje
         const personality = database.getConfig('personalidad') || 'Eres un asistente útil.'
-        const humanized = await aiProcessor.humanizeReminder(reminder.message, personality)
+        const model = database.getConfig('modelo')
         
-        messageToSend = `🔔 *RECORDATORIO*\n\n${humanized}`
+        if (model) {
+            const humanized = await aiProcessor.humanizeReminder(reminder.message, personality, model)
+            messageToSend = `🔔 *RECORDATORIO*\n\n${humanized}`
+        }
         
     } catch (error) {
         console.error('⚠️ Falló la humanización, enviando original:', error)

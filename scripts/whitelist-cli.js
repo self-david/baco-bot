@@ -10,11 +10,11 @@ const phoneNumber = args[1]
 function showHelp() {
     console.log('\n📱 Gestión de Whitelist\n')
     console.log('Uso:')
-    console.log('  npm run whitelist add <número>     - Agregar usuario')
-    console.log('  npm run whitelist remove <número>  - Quitar usuario')
-    console.log('  npm run whitelist list             - Listar todos\n')
+    console.log(' baco-bot whitelist add <número>     - Agregar usuario')
+    console.log(' baco-bot whitelist remove <número>  - Quitar usuario')
+    console.log(' baco-bot whitelist list             - Listar todos\n')
     console.log('Ejemplo:')
-    console.log('  npm run whitelist add 521XXXXXXXXXX@c.us')
+    console.log(' baco-bot whitelist add 521XXXXXXXXXX@c.us')
 }
 
 function formatPhoneNumber(number) {

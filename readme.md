@@ -46,21 +46,26 @@ npm install
 
 ### 2. Configuración de IA (Ollama)
 
-Asegúrate de tener el modelo base y crear el personalizado:
+Solo necesitas descargar el modelo que desees usar:
 
 ```bash
 ollama pull gemma3:1b
-ollama create leslye -f Modelfile
 ```
 
-> **Nota:** Puedes usar otros modelos editando el código, pero `leslye` es el predeterminado.
+> **Nota:** Puedes usar cualquier modelo que tengas en Ollama. Configúralo desde WhatsApp con el comando `/modelo`.
 
 ### 3. Ejecución
+
+Primero, activa el comando globalmente (solo una vez):
+
+```bash
+npm link
+```
 
 #### Modo Desarrollo (con logs en pantalla)
 
 ```bash
-npm run dev
+asistente dev
 ```
 
 La primera vez te pedirá escanear un código QR con tu WhatsApp. Luego verás los logs de mensajes y errores en tiempo real.
@@ -68,21 +73,21 @@ La primera vez te pedirá escanear un código QR con tu WhatsApp. Luego verás l
 #### Modo Producción (24/7 en segundo plano)
 
 ```bash
-npm run start
+asistente start
 ```
 
 Usa `pm2` para mantener el bot activo incluso si cierras la terminal.
 
-- `npm run stop`: Detener el bot
-- `npm run restart`: Reiniciar el bot (útil tras cambios)
+- `asistente stop`: Detener el bot
+- `asistente restart`: Reiniciar el bot (útil tras cambios)
 
 ### 4. Gestión de Usuarios (Whitelist)
 
 Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comandos en la terminal:
 
-- **Listar usuarios:** `npm run whitelist list`
-- **Agregar usuario:** `npm run whitelist add 521xxxxxxxx@c.us`
-- **Eliminar usuario:** `npm run whitelist remove 521xxxxxxxx@c.us`
+- **Listar usuarios:** `asistente whitelist list`
+- **Agregar usuario:** `asistente whitelist add 521xxxxxxxx@c.us`
+- **Eliminar usuario:** `asistente whitelist remove 521xxxxxxxx@c.us`
 - **Promover a Administrador:** `node scripts/set-admin.js 521xxxxxxxx@c.us`
 
 ### 5. Configuración Inicial (Wizard)
@@ -90,7 +95,7 @@ Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comando
 Puedes configurar el nombre y personalidad del bot interactivamente:
 
 ```bash
-npm run init
+asistente init
 ```
 
 ## 🔧 Comandos del Bot (En WhatsApp)
@@ -103,7 +108,7 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 | `/tareas`      | Lista tus recordatorios pendientes                                 |
 | `/borrar [ID]` | Elimina una tarea específica                                       |
 | `/limpiar`     | Borra el historial de conversación con la IA (reinicio de memoria) |
-| `/stats`       | Muestra estadísticas del sistema (admin)                           |
+| `/modelo [N]`  | Cambia el modelo de IA o lista los disponibles (admin)             |
 | `/generar`     | Solicita un código de acceso (público)                             |
 | `/activar [C]` | Activa a un usuario usando su código de solicitud (admin)          |
 | `/inactivar`   | Remueve el acceso de un usuario (admin)                            |

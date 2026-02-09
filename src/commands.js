@@ -2,6 +2,7 @@ const Fuse = require('fuse.js')
 const database = require('./database')
 const reminders = require('./reminders')
 const utils = require('./utils')
+const aiProcessor = require('./ai-processor')
 
 async function processCommand(message, chatId, client) {
     const texto = message.body.trim()
@@ -174,15 +175,45 @@ function handleRefinar(args) {
     return `✅ Personalidad refinada. Nueva personalidad:\n\n"${nuevaPersonalidad}"`
 }
 
-function handleModelo(args) {
+async function handleModelo(args) {
+    const modelosDisponibles = await aiProcessor.listOllamaModels()
+    
     if (args.length === 0) {
-        const modeloActual = database.getConfig('modelo') || 'Leslye'
-        return `Modelo actual: *${modeloActual}*`
+        const modeloActual = database.getConfig('modelo')
+        let msg = `🤖 *Gestión de Modelos*\n\n`
+        msg += `Modelo actual: *${modeloActual || 'No configurado'}*\n\n`
+        
+        if (modelosDisponibles.length > 0) {
+            msg += `Modelos instalados en Ollama:\n`
+            modelosDisponibles.forEach((m, i) => {
+                msg += `${i + 1}. ${m}\n`
+            })
+            msg += `\nUsa */modelo [nombre]* para cambiar.`
+        } else {
+            msg += `⚠️ No se detectaron modelos en Ollama. Asegúrate de que Ollama esté corriendo.`
+        }
+        return msg
     }
     
     const nuevoModelo = args[0]
+    const modeloAnterior = database.getConfig('modelo')
+    
+    // Validar si el modelo existe en Ollama
+    if (modelosDisponibles.length > 0 && !modelosDisponibles.includes(nuevoModelo)) {
+        // Intentar buscar coincidencia parcial (por si falta el tag :latest)
+        const match = modelosDisponibles.find(m => m.startsWith(nuevoModelo + ':'))
+        if (!match) {
+            return `❌ El modelo *${nuevoModelo}* no parece estar instalado en Ollama.\n\nInstálalo con: \`ollama pull ${nuevoModelo}\``
+        }
+    }
+    
+    // Descargar el modelo anterior si es diferente
+    if (modeloAnterior && modeloAnterior !== nuevoModelo) {
+        aiProcessor.unloadModel(modeloAnterior).catch(() => {})
+    }
+
     database.setConfig('modelo', nuevoModelo)
-    return `✅ Modelo cambiado a: *${nuevoModelo}*\n\n⚠️ Asegúrate de que el modelo esté disponible en Ollama`
+    return `✅ Modelo cambiado a: *${nuevoModelo}*`
 }
 
 // ========== COMANDOS DE WHITELIST ==========

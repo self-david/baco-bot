@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Bot de WhatsApp con IA y recordatorios inteligentes",
   "main": "index.js",
+  "bin": {
+    "baco-bot ": "bin/asistente.js"
+  },
   "scripts": {
     "dev": "node index.js",
     "start": "node scripts/pm2-manager.js start",
@@ -10,7 +13,8 @@
     "qr": "node cleanup.js && cross-env SETUP_MODE=true node index.js",
     "init": "node scripts/init.js",
     "migrate": "node scripts/migrate-to-db.js",
-    "whitelist": "node scripts/whitelist-cli.js"
+    "whitelist": "node scripts/whitelist-cli.js",
+    "model": "node scripts/model-cli.js"
   },
   "keywords": [
     "whatsapp",
