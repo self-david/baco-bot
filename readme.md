@@ -40,7 +40,7 @@ Clona el repositorio e instala las dependencias:
 
 ```bash
 git clone <URL_DEL_REPO>
-cd wa-bot
+cd baco-bot
 npm install
 ```
 
@@ -65,7 +65,7 @@ npm link
 #### Modo Desarrollo (con logs en pantalla)
 
 ```bash
-asistente dev
+baco-bot dev
 ```
 
 La primera vez te pedirá escanear un código QR con tu WhatsApp. Luego verás los logs de mensajes y errores en tiempo real.
@@ -73,21 +73,21 @@ La primera vez te pedirá escanear un código QR con tu WhatsApp. Luego verás l
 #### Modo Producción (24/7 en segundo plano)
 
 ```bash
-asistente start
+baco-bot start
 ```
 
 Usa `pm2` para mantener el bot activo incluso si cierras la terminal.
 
-- `asistente stop`: Detener el bot
-- `asistente restart`: Reiniciar el bot (útil tras cambios)
+- `baco-bot stop`: Detener el bot
+- `baco-bot restart`: Reiniciar el bot (útil tras cambios)
 
 ### 4. Gestión de Usuarios (Whitelist)
 
 Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comandos en la terminal:
 
-- **Listar usuarios:** `asistente whitelist list`
-- **Agregar usuario:** `asistente whitelist add 521xxxxxxxx@c.us`
-- **Eliminar usuario:** `asistente whitelist remove 521xxxxxxxx@c.us`
+- **Listar usuarios:** `baco-bot whitelist list`
+- **Agregar usuario:** `baco-bot whitelist add 521xxxxxxxx@c.us`
+- **Eliminar usuario:** `baco-bot whitelist remove 521xxxxxxxx@c.us`
 - **Promover a Administrador:** `node scripts/set-admin.js 521xxxxxxxx@c.us`
 
 ### 5. Configuración Inicial (Wizard)
@@ -95,7 +95,7 @@ Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comando
 Puedes configurar el nombre y personalidad del bot interactivamente:
 
 ```bash
-asistente init
+baco-bot init
 ```
 
 ## 🔧 Comandos del Bot (En WhatsApp)

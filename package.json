@@ -1,5 +1,5 @@
 {
-  "name": "wa-bot",
+  "name": "baco-bot",
   "version": "1.0.0",
   "description": "Bot de WhatsApp con IA y recordatorios inteligentes",
   "main": "index.js",

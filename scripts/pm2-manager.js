@@ -29,9 +29,9 @@ function start() {
         // Verificar si ya está corriendo
         try {
             const list = execSync('pm2 list', { encoding: 'utf-8' })
-            if (list.includes('wa-bot')) {
+            if (list.includes('baco-bot')) {
                 console.log('⚠️  El bot ya está corriendo. Reiniciando...')
-                execSync('pm2 restart wa-bot', { stdio: 'inherit' })
+                execSync('pm2 restart baco-bot', { stdio: 'inherit' })
                 console.log('✅ Bot reiniciado exitosamente')
                 return
             }
@@ -41,12 +41,12 @@ function start() {
         
         // Iniciar con PM2
         const indexPath = path.join(__dirname, '..', 'index.js')
-        execSync(`pm2 start "${indexPath}" --name wa-bot`, { stdio: 'inherit' })
+        execSync(`pm2 start "${indexPath}" --name baco-bot`, { stdio: 'inherit' })
         
         console.log('\n✅ Bot iniciado exitosamente')
         console.log('\nComandos útiles:')
         console.log('  pm2 list          - Ver estado')
-        console.log('  pm2 logs wa-bot   - Ver logs')
+        console.log('  pm2 logs baco-bot   - Ver logs')
         console.log('  pm2 monit         - Monitor interactivo')
         console.log(' baco-bot stop      - Detener bot\n')
         
@@ -70,7 +70,7 @@ async function stop() {
     // Intentar detener con PM2 primero
     if (checkPM2Installed()) {
         try {
-            execSync('pm2 delete wa-bot', { stdio: 'ignore' })
+            execSync('pm2 delete baco-bot', { stdio: 'ignore' })
             console.log('✅ Bot detenido con PM2')
         } catch (e) {
             console.log('⚠️  No se encontró proceso PM2')
@@ -82,7 +82,7 @@ async function stop() {
         try {
             console.log('🧹 Limpiando procesos de Chrome y Node...')
             execSync('taskkill /F /IM chrome.exe /T 2>nul', { stdio: 'ignore' })
-            execSync('taskkill /F /FI "IMAGENAME eq node.exe" /FI "WINDOWTITLE eq wa-bot*" 2>nul', { stdio: 'ignore' })
+            execSync('taskkill /F /FI "IMAGENAME eq node.exe" /FI "WINDOWTITLE eq baco-bot*" 2>nul', { stdio: 'ignore' })
         } catch (e) {
             // Ignorar errores si no hay procesos
         }
