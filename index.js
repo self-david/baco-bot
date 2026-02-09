@@ -150,7 +150,8 @@ client.on('message_create', async message => {
     // 2.5 Verificar si es una petición para posponer el último recordatorio (IA)
     const lastReminder = database.getLastCompletedReminder(chatId)
     if (lastReminder && !texto.startsWith('/')) {
-        const postponeIntent = await aiProcessor.analyzePostponeIntent(texto, lastReminder)
+        const model = database.getConfig('modelo') || 'Leslye'
+        const postponeIntent = await aiProcessor.analyzePostponeIntent(texto, lastReminder, model)
         if (postponeIntent.isPostpone) {
             try {
                 // Notificar que se está procesando (opcional)
