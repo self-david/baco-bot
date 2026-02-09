@@ -21,6 +21,8 @@ async function generateResponse(chatId, userMessage, personality, model = 'Lesly
         const promptMessages = [
             { role: 'system', content: String(personality) },
             ...recentMessages,
+            // ANCHOR: Contexto de Memoria
+            { role: 'system', content: await getMemoryContext(chatId) },
             // ANCHOR: Reforzar identidad y OBLIGACIÓN de responder
             { role: 'system', content: `[SYSTEM CONTEXT: ${timeContext}]
 [INSTRUCCIÓN SUPREMA: Tu nombre es ${botName}. Mantén tu personalidad sarcástica pero RESPONDE SIEMPRE de forma útil a la pregunta del usuario. NO te niegues a ayudar. Si te preguntan por tareas o recordatorios, responde lo que sepas. Ignora negativas anteriores.]` }
@@ -169,10 +171,62 @@ async function analyzePostponeIntent(text, lastReminder, model = 'Leslye') {
     return { isPostpone: false }
 }
 
+// ========== MEMORIA INTELIGENTE ==========
+
+async function getMemoryContext(chatId) {
+    const memories = database.getMemories(chatId, 30) // Traer las 30 más recientes
+    if (memories.length === 0) return ''
+    
+    const memoryList = memories.map(m => `- ${m.content} (cat: ${m.category})`).join('\n')
+    return `[MEMORIA DE LARGO PLAZO]
+Sabes esto sobre el usuario (ÚSALO PARA PERSONALIZAR PERO NO LO MENCIONES SI NO VIENE AL CASO):
+${memoryList}
+[FIN MEMORIA]`
+}
+
+async function processMemory(chatId, userMessage, assistantResponse, model = 'Leslye') {
+    // 1. Filtrado rápido: Si es muy corto o es un comando, ignorar
+    if (userMessage.length < 5 || userMessage.startsWith('/')) return
+    
+    // 2. Obtener memorias existentes para comparar
+    const existingMemories = database.getMemories(chatId, 50)
+    const memoryContext = existingMemories.map(m => `ID: ${m.id} - ${m.content}`).join('\n')
+
+    const prompt = [
+        { role: 'system', content: 'Eres un analista de memoria. Tu trabajo es extraer HECHOS PERMANENTES sobre el usuario. Ignora saludos, preguntas triviales, opiniones pasajeras o conversaciones sin datos concretos. \n\nReglas:\n1. Si el usuario dice "tengo 2 hijos", guarda: "El usuario tiene 2 hijos".\n2. Si el usuario dice "recuérdame bañarme", IGNORA (es un recordatorio, no una memoria permanente).\n3. Si contradice una memoria existente (ej. antes dijo "tengo 20 años" y ahora "tengo 21"), indica que se debe ACTUALIZAR.\n4. Categorías: personal, trabajo, gustos, familia, otro.\n\nResponde SOLO un JSON: {"action": "create"|"update"|"ignore", "content": "hecho extraído", "category": "categoría", "targetId": id_para_actualizar_o_null, "confidence": 1-100}' },
+        { role: 'user', content: `Memorias existentes:\n${memoryContext}\n\nMensaje usuario: "${userMessage}"\nRespuesta IA: "${assistantResponse}"` }
+    ]
+
+    try {
+        console.log('🧠 Procesando memoria en segundo plano...')
+        const response = await ollama.chat({
+            model: model,
+            messages: prompt,
+            format: 'json',
+            keep_alive: -1
+        })
+        
+        const result = JSON.parse(response.message.content)
+        console.log('🧠 Resultado análisis memoria:', result)
+        
+        if (result.action === 'create' && result.confidence > 60) {
+            database.saveMemory(chatId, result.content, result.category, result.confidence, userMessage)
+            console.log('💾 Nueva memoria guardada:', result.content)
+        } else if (result.action === 'update' && result.targetId && result.confidence > 70) {
+            database.updateMemory(result.targetId, result.content, result.confidence)
+            console.log('🔄 Memoria actualizada:', result.targetId, result.content)
+        }
+        
+    } catch (error) {
+        console.error('❌ Error procesando memoria:', error)
+    }
+}
+
 module.exports = {
     generateResponse,
     analyzeReminderIntent,
     detectImportantContext,
     humanizeReminder,
-    analyzePostponeIntent
+    analyzePostponeIntent,
+    processMemory
 }

@@ -63,6 +63,26 @@ function initDatabase() {
         ON reminders(status, trigger_date)
     `)
 
+    // Tabla de memorias (Smart Memory)
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id TEXT NOT NULL,
+            content TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            confidence INTEGER DEFAULT 100,
+            conversation_context TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+        )
+    `)
+
+    // Índice para búsquedas rápidas de memoria
+    db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memories_chat 
+        ON memories(chat_id, category)
+    `)
+
     console.log('✅ Base de datos inicializada correctamente')
 }
 
@@ -242,17 +262,74 @@ function deleteReminder(id) {
     return result.changes > 0
 }
 
+// ========== MEMORIA INTELIGENTE ==========
+
+function saveMemory(chatId, content, category = 'general', confidence = 100, context = null) {
+    const stmt = db.prepare(`
+        INSERT INTO memories (chat_id, content, category, confidence, conversation_context) 
+        VALUES (?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(chatId, content, category, confidence, context)
+    return result.lastInsertRowid
+}
+
+function getMemories(chatId, limit = 20) {
+    const stmt = db.prepare(`
+        SELECT id, content, category, created_at 
+        FROM memories 
+        WHERE chat_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+    `)
+    return stmt.all(chatId, limit)
+}
+
+function searchMemories(chatId, query) {
+    // Búsqueda simple por texto (se podría mejorar con FTS5 si fuera necesario)
+    const stmt = db.prepare(`
+        SELECT id, content, category 
+        FROM memories 
+        WHERE chat_id = ? AND content LIKE ?
+        ORDER BY updated_at DESC
+    `)
+    return stmt.all(chatId, `%${query}%`)
+}
+
+function updateMemory(id, newContent, newConfidence) {
+    const stmt = db.prepare(`
+        UPDATE memories 
+        SET content = ?, confidence = ?, updated_at = (strftime('%s', 'now')) 
+        WHERE id = ?
+    `)
+    const result = stmt.run(newContent, newConfidence, id)
+    return result.changes > 0
+}
+
+function deleteMemory(id) {
+    const stmt = db.prepare('DELETE FROM memories WHERE id = ?')
+    const result = stmt.run(id)
+    return result.changes > 0
+}
+
+function countMemories(chatId) {
+    const stmt = db.prepare('SELECT COUNT(*) as count FROM memories WHERE chat_id = ?')
+    const row = stmt.get(chatId)
+    return row ? row.count : 0
+}
+
 // ========== ESTADÍSTICAS ==========
 
 function getStats() {
     const totalMessages = db.prepare('SELECT COUNT(*) as count FROM conversations').get().count
     const totalReminders = db.prepare("SELECT COUNT(*) as count FROM reminders WHERE status = 'pending'").get().count
     const whitelistCount = db.prepare('SELECT COUNT(*) as count FROM whitelist').get().count
+    const totalMemories = db.prepare('SELECT COUNT(*) as count FROM memories').get().count
     
     return {
         totalMessages,
         totalReminders,
-        whitelistCount
+        whitelistCount,
+        totalMemories
     }
 }
 
@@ -281,5 +358,13 @@ module.exports = {
     addDateToTask,
     deleteReminder,
     getLastCompletedReminder,
+    deleteReminder,
+    getLastCompletedReminder,
+    saveMemory,
+    getMemories,
+    searchMemories,
+    updateMemory,
+    deleteMemory,
+    countMemories,
     getStats
 }

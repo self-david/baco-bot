@@ -1,4 +1,5 @@
 const chrono = require('chrono-node')
+const Fuse = require('fuse.js')
 
 function formatPhoneNumber(number) {
     if (number.includes('@c.us')) return number
@@ -14,20 +15,44 @@ function parseRelativeTime(text) {
     const parsed = chrono.es.parseDate(text, new Date(), { forwardDate: true })
     if (parsed) return parsed
     
-    // Fallback manual para patrones simples
-    const patterns = [
-        { regex: /(?:en\s+)?(\d+)\s+segundos?/i, multiplier: 1000 },
-        { regex: /(?:en\s+)?(\d+)\s+minutos?/i, multiplier: 60 * 1000 },
-        { regex: /(?:en\s+)?(\d+)\s+horas?/i, multiplier: 60 * 60 * 1000 },
-        { regex: /(?:en\s+)?(\d+)\s+d[ií]as?/i, multiplier: 24 * 60 * 60 * 1000 },
-        { regex: /(?:en\s+)?(\d+)\s+semanas?/i, multiplier: 7 * 24 * 60 * 60 * 1000 }
-    ]
+    // Fallback con Fuse.js para unidades con typos
+    // Extracción más genérica con regex para capturar número y "algo" que parece unidad
+    // Patrón: (número) (palabra)
+    const manualPattern = /(?:en\s+)?(\d+)\s+([a-zA-ZñÑ]+)/i
+    const match = text.match(manualPattern)
     
-    for (const pattern of patterns) {
-        const match = text.match(pattern.regex)
-        if (match) {
-            const amount = parseInt(match[1])
-            return new Date(Date.now() + amount * pattern.multiplier)
+    if (match) {
+        const amount = parseInt(match[1])
+        const unitInput = match[2].toLowerCase()
+        
+        // Unidades base y sus variantes mapeadas a milisegundos
+        const units = [
+            { name: 'segundos', value: 1000, keys: ['segundos', 'segundo', 'segs', 'seg', 's'] },
+            { name: 'minutos', value: 60 * 1000, keys: ['minutos', 'minuto', 'mins', 'min', 'm', 'mintos', 'minuts'] },
+            { name: 'horas', value: 60 * 60 * 1000, keys: ['horas', 'hora', 'hrs', 'hs', 'h'] },
+            { name: 'dias', value: 24 * 60 * 60 * 1000, keys: ['dias', 'dia', 'días', 'día', 'd'] },
+            { name: 'semanas', value: 7 * 24 * 60 * 60 * 1000, keys: ['semanas', 'semana', 'sem'] }
+        ]
+        
+        // Aplanar lista para Fuse
+        const flatUnits = []
+        units.forEach(u => {
+            u.keys.forEach(k => {
+                flatUnits.push({ token: k, value: u.value })
+            })
+        })
+        
+        const fuse = new Fuse(flatUnits, {
+            keys: ['token'],
+            threshold: 0.4, // Tolerancia a typos (0.0 exacto, 1.0 cualquier cosa)
+        })
+        
+        const results = fuse.search(unitInput)
+        
+        if (results.length > 0) {
+            const bestMatch = results[0].item
+            console.log(`🎯 Fuzzy match: "${unitInput}" -> "${bestMatch.token}" (${bestMatch.value}ms)`)
+            return new Date(Date.now() + amount * bestMatch.value)
         }
     }
     
@@ -109,25 +134,37 @@ function extractReminderFromText(text) {
 
 function containsImportantKeywords(text) {
     const keywords = [
-        'importante',
-        'urgente',
-        'no olvides',
-        'pendiente',
-        'reunión',
-        'junta',
-        'cita',
-        'deadline',
-        'entrega',
-        'recordar',
-        'acuérdate',
-        'compromiso',
-        'mañana',
-        'próximo',
-        'siguiente semana'
+        'importante', 'urgente', 'no olvides', 'pendiente', 'reunión', 'junta', 
+        'cita', 'deadline', 'entrega', 'recordar', 'acuérdate', 'compromiso', 
+        'mañana', 'próximo', 'siguiente semana', 'pagar', 'vencimiento'
     ]
     
-    const lowerText = text.toLowerCase()
-    return keywords.some(keyword => lowerText.includes(keyword))
+    // Configurar Fuse para buscar keywords en el texto
+    // Truco: Fuse busca "pattern" en "list of documents".
+    // Aquí queremos ver si alguna de las keywords está en el texto.
+    // Podemos tokenizar el texto y buscar cada token en la lista de keywords.
+    
+    const tokens = text.toLowerCase().split(/\s+|[.,;?!]+/)
+    
+    const fuse = new Fuse(keywords.map(k => ({ key: k })), {
+        keys: ['key'],
+        threshold: 0.3, // Un poco estricto para no confundir palabras cortas
+        includeScore: true
+    })
+    
+    // Verificar si algún token del mensaje hace match con alguna keyword
+    for (const token of tokens) {
+        // Ignorar palabras muy cortas para evitar falsos positivos
+        if (token.length < 4) continue 
+        
+        const results = fuse.search(token)
+        if (results.length > 0) {
+            console.log(`🎯 Fuzzy keyword match: "${token}" -> "${results[0].item.key}"`)
+            return true
+        }
+    }
+    
+    return false
 }
 
 function formatRemindersList(reminders) {

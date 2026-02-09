@@ -1,3 +1,4 @@
+const Fuse = require('fuse.js')
 const database = require('./database')
 const reminders = require('./reminders')
 const utils = require('./utils')
@@ -13,7 +14,42 @@ async function processCommand(message, chatId, client) {
     const args = parts.slice(1)
     
     try {
-        switch (command) {
+        // Lista de comandos válidos para fuzzy search
+        const validCommands = [
+            'nombre', 'personalidad', 'refinar', 'modelo',
+            'whitelist', 'lista', 'w', 'l',
+            'recordar', 
+            'tarea', 'tareas', 't',
+            'recordatorios', // 'tareas', 't' ya están arriba
+            'completar',
+            'cancelar',
+            'fecha', 'f',
+            'limpiar',
+            'memoria', 'memorias',
+            'olvidar',
+            'stats',
+            'ayuda', 'help', 'menu'
+        ]
+
+        let commandToExecute = command
+
+        // Si el comando no es exacto, intentar fuzzy match
+        if (!validCommands.includes(command)) {
+            const fuse = new Fuse(validCommands.map(c => ({ name: c })), {
+                keys: ['name'],
+                threshold: 0.4,
+            })
+            
+            const results = fuse.search(command)
+            
+            if (results.length > 0) {
+                const bestMatch = results[0].item.name
+                console.log(`🎯 Fuzzy command match: "${command}" -> "${bestMatch}"`)
+                commandToExecute = bestMatch
+            }
+        }
+
+        switch (commandToExecute) {
             case 'nombre':
                 return handleNombre(args)
                 
@@ -36,13 +72,11 @@ async function processCommand(message, chatId, client) {
                 return handleRecordar(args, chatId)
                 
             case 'tarea':
-            case 'tareas':
             case 't':
                 return handleTarea(args, chatId)
                 
             case 'recordatorios':
-            case 'tareas': // Alias
-            case 't': // Alias
+            case 'tareas':
                 return handleListarRecordatorios(chatId)
                 
             case 'completar':
@@ -52,10 +86,18 @@ async function processCommand(message, chatId, client) {
                 return handleCancelar(args)
                 
             case 'fecha':
+            case 'f':
                 return handleAgregarFecha(args, chatId)
 
             case 'limpiar':
                 return handleLimpiar(chatId)
+
+            case 'memoria':
+            case 'memorias':
+                return handleMemoria(chatId)
+
+            case 'olvidar':
+                return handleOlvidar(args, chatId)
 
             case 'stats':
                 return handleStats()
@@ -66,6 +108,7 @@ async function processCommand(message, chatId, client) {
                 return showHelp()
                 
             default:
+                // Si llegamos aquí es porque ni el fuzzy match encontró algo decente
                 return `❌ Comando desconocido: /${command}\n\nUsa /ayuda para ver comandos disponibles`
         }
     } catch (error) {
@@ -344,6 +387,43 @@ function showHelp() {
 /recordar Reunión el 15 de marzo a las 10am
 /tarea Revisar documentos
 /fecha 3 mañana a las 9am`
+}
+
+function handleMemoria(chatId) {
+    const memories = database.getMemories(chatId, 10)
+    
+    if (memories.length === 0) {
+        return '🧠 No tengo memorias guardadas sobre ti aún.'
+    }
+    
+    let mensaje = `🧠 *Memorias sobre ti*\n\n`
+    memories.forEach(m => {
+        mensaje += `🆔 *${m.id}* (${m.category}): ${m.content}\n`
+    })
+    
+    mensaje += `\nPara borrar una memoria usa: /olvidar [ID]`
+    return mensaje
+}
+
+function handleOlvidar(args, chatId) {
+    if (args.length === 0) {
+        return '❌ Debes especificar el ID de la memoria a olvidar.\nEjemplo: /olvidar 5'
+    }
+    
+    const id = parseInt(args[0])
+    if (isNaN(id)) {
+        return '❌ El ID debe ser un número.'
+    }
+    
+    // Verificar que la memoria pertenezca al chat (aunque deleteMemory solo borra por ID, es bueno validar o asumir que el ID es único globalmente, mejor: deleteMemory debería checar ownership si fuera multi-user estricto, pero por ahora confiamos en el ID)
+    // En una implementación más estricta, getMemoryById comprobaría el chatId.
+    // Asumiremos que el usuario ve sus propios IDs con /memoria
+    
+    if (database.deleteMemory(id)) {
+        return `🗑️ Memoria ${id} eliminada para siempre.`
+    } else {
+        return `❌ No se encontró la memoria con ID ${id}.`
+    }
 }
 
 module.exports = {

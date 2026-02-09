@@ -200,7 +200,11 @@ client.on('message_create', async message => {
         // generateResponse ya guarda los mensajes en la DB, no necesitamos guardarlos aquí explícitamente doble
         // pero validamos si la implementación de generateResponse lo hace (sí lo hace en línea 8 y 29 de ai-processor.js)
         
-        return message.reply(response)
+        return message.reply(response).then(() => {
+            // 5. Procesar memoria en segundo plano (Fire and forget)
+            aiProcessor.processMemory(chatId, texto, response)
+                .catch(err => console.error('Error procesando memoria:', err))
+        })
     } catch (error) {
         console.error('Error generando respuesta:', error)
         return message.reply('❌ Lo siento, tuve un error procesando tu mensaje.')
