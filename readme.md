@@ -122,22 +122,33 @@ Para usar el comando `/calendario`, debes configurar las credenciales de Google 
 
 1.  Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/).
 2.  Habilita la **Google Calendar API**.
-3.  Crea credenciales de tipo **OAuth Client ID**.
-4.  Agrega las siguientes variables a tu archivo `.env`:
+3.  Crea credenciales de tipo **ID de cliente OAuth**:
+    - **Tipo de aplicación:** `App de escritorio` (Desktop App).
+    - Esto es necesario para el flujo de autorización manual (copiar/pegar código).
+4.  **Pantalla de Consentimiento (OAuth Consent Screen):**
+    - Mantén la aplicación en modo **Testing**.
+    - **IMPORTANTE:** Debes agregar tu correo de Gmail en la sección de **Test Users** (Usuarios de prueba). De lo contrario, Google bloqueará el acceso.
+5.  Agrega las variables a tu archivo `.env`:
 
 ```env
 GOOGLE_CLIENT_ID=tu_cliente_id_de_google
 GOOGLE_CLIENT_SECRET=tu_secreto_de_google
 ```
 
-Una vez configurado, usa `/calendario conectar` en WhatsApp para vincular tu cuenta.
+6.  **Vincular cuenta en WhatsApp:**
+    - Usa `/calendario conectar` y abre el link.
+    - Si sale un aviso de "App no veridificada", haz clic en **Configuración avanzada** > **Ir a [Nombre App] (no seguro)**.
+    - Copia el código resultante y envíalo: `/calendario codigo TU_CODIGO`.
+
+---
 
 ## 📂 Estructura del Proyecto
 
 - `index.js`: Punto de entrada principal. Maneja la conexión de WhatsApp.
-- `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, config).
-- `src/ai-processor.js`: Lógica para interactuar con Ollama y detectar recordatorios.
-- `src/reminders.js`: Motor de cron y gestión de fechas para recordatorios.
+- `src/calendar-service.js`: Gestión de Google Calendar API y OAuth.
+- `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, credenciales Google).
+- `src/ai-processor.js`: Lógica para interactuar con Ollama y analizar intenciones.
+- `src/reminders.js`: Motor de recordatorios y gestión de estados.
 - `src/commands.js`: Procesador de comandos explícitos (`/`).
 - `scripts/`: Herramientas de utilidad (init, migrate, whitelist-cli).
 
