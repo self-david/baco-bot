@@ -86,49 +86,87 @@ function formatDateShort(date) {
 }
 
 function extractReminderFromText(text) {
-    // Patrones para detectar recordatorios
-    const patterns = [
-        // 1. Estándar: "Recuérdame comprar leche en 10 minutos"
-        /(?:recu[ée]rdame|no olvides|acu[ée]rdate|av[íi]same)\s+(?:que|de)?\s*(.+?)\s+(?:en|el|dentro de)\s+(.+)/i,
-        
-        // 2. Inverso: "En 10 minutos recuérdame comprar leche"
-        /(?:en|el|dentro de)\s+(.+?)\s+(?:recu[ée]rdame|no olvides|av[íi]same)\s+(?:que|de)?\s*(.+)/i,
-        
-        // 3. Simple con tiempo al final: "Comprar leche en 10 minutos porfa" (requiere palabras clave de recordatorio en algún lado o ser muy explícito)
-        /(?:recu[ée]rdame|no olvides|av[íi]same)\s+(.+)/i,
-        
-        // 4. "Tengo que X en Y" (experimental)
-        /tengo que\s+(.+?)\s+(?:en|el|dentro de)\s+(.+)/i
-    ]
+    // 1. Intentar extraer fecha con chrono-node
+    const parsedDate = chrono.es.parse(text, new Date(), { forwardDate: true })
     
-    for (const pattern of patterns) {
-        const match = text.match(pattern)
-        if (match) {
-            // Identificar qué grupo es mensaje y qué grupo es tiempo
-            // Esto depende del regex. 
-            // Para el patrón 2 (Inverso), match[1] es tiempo, match[2] es mensaje.
-            // Para el patrón 1 (Estándar), match[1] es mensaje, match[2] es tiempo.
-            
-            let message, timeExpression
-            
-            if (pattern.source.startsWith('(?:en|el|dentro de)')) {
-                // Caso inverso
-                timeExpression = match[1].trim()
-                message = match[2].trim()
-            } else {
-                // Caso estándar
-                message = match[1].trim()
-                timeExpression = match[2] ? match[2].trim() : null // Puede ser null en caso 3
-            }
+    if (parsedDate.length > 0) {
+        // Usar la primera fecha encontrada convertida a objeto Date
+        const dateResult = parsedDate[0]
+        const triggerDate = dateResult.start.date()
+        
+        // 2. Limpiar el texto: Quitar la parte de la fecha identificada
+        let cleanText = text.replace(dateResult.text, '').trim()
+        
+        // 3. Limpiar prefijos comunes y palabras de relleno
+        const prefixes = [
+            /^(?:hey|hola|ojo|bueno|entonces),?\s*/i,
+            /^(?:recu[ée]rdame|no olvides|acu[ée]rdate|av[íi]same|notif[íi]came)\s+(?:que|de|para|por)?\s*/i,
+            /^(?:tengo que|debo|hay que|necesito)\s+/i,
+            /^(?:a las?|a la|en|el|dentro de|a)\s+/i // "a" solitario o "a la(s)"
+        ]
 
-            return {
-                found: true,
-                message: message,
-                timeExpression: timeExpression
+        // 3.1 Limpieza específica para restos de hora (ej: "de la tarde" si chrono solo agarró "5")
+        const timeLeftovers = [
+            /^(?:de|por) la (?:mañana|tarde|noche)/i,
+            /^(?:am|pm)/i
+        ]
+        
+        // Aplicar limpieza iterativa
+        let previousText = ''
+        while (cleanText !== previousText) {
+            previousText = cleanText
+            
+            // Prefijos
+            for (const prefix of prefixes) {
+                cleanText = cleanText.replace(prefix, '').trim()
             }
+            // Restos de hora
+            for (const leftover of timeLeftovers) {
+                cleanText = cleanText.replace(leftover, '').trim()
+            }
+        }
+
+        // 4. Limpieza final de conectores sueltos al inicio o final
+        // Ej: "paga la tarjeta el" -> "paga la tarjeta"
+        cleanText = cleanText.replace(/\s+(?:el|la|en|a|de|para|por)$/i, '').trim()
+        
+        // Si después de limpiar no queda nada, usar el texto original (menos la fecha)
+        if (!cleanText) {
+            cleanText = text.replace(dateResult.text, '').trim()
+        }
+
+        return {
+            found: true,
+            message: cleanText,
+            timeExpression: dateResult.text, 
+            date: triggerDate
         }
     }
     
+    // Fallback regex (se mantiene igual)
+    const relativePattern = /(?:en|dentro de)\s+(\d+)\s+(minutos?|mins?|m|horas?|hrs?|h|segundos?|segs?|s)/i
+    const match = text.match(relativePattern)
+    
+    if (match) {
+        const timeExpression = match[0]
+        let message = text.replace(timeExpression, '').trim()
+         
+        const prefixes = [
+             /^(?:hey|hola|ojo),?\s*/i,
+             /^(?:recu[ée]rdame|no olvides|acu[ée]rdate|av[íi]same)\s+(?:que|de|para)?\s*/i,
+             /^(?:tengo que|debo)\s+/i
+        ]
+        for (const prefix of prefixes) {
+            message = message.replace(prefix, '').trim()
+        }
+        
+        return {
+            found: true,
+            message: message,
+            timeExpression: timeExpression
+        }
+    }
+
     return { found: false }
 }
 

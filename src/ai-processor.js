@@ -123,8 +123,8 @@ function detectImportantContext(userMessage, aiResponse) {
 async function humanizeReminder(text, personality, model) {
     try {
         const prompt = [
-            { role: 'system', content: `${personality}\n\nTU TAREA: Tienes un recordatorio: "${text}". Reescríbelo como un mensaje directo de WhatsApp para el usuario. Sé breve, natural y usa tu personalidad (sarcasmo/humor negro si aplica). NO uses prefijos como "Claro" o "Aquí tienes". Solo el mensaje.` },
-            { role: 'user', content: 'Refrasea este recordatorio.' }
+            { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbelo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario (no digas "tengo que pasear", di "recuerda pasear").\n4. Sé breve, directo y usa tu personalidad (sarcasmo/humor negro si aplica).\n5. El mensaje debe ser la notificación final listas para enviar.` },
+            { role: 'user', content: 'Genera el mensaje de recordatorio.' }
         ]
 
         const response = await ollama.chat({
@@ -134,7 +134,13 @@ async function humanizeReminder(text, personality, model) {
             options: OLLAMA_OPTIONS
         })
         
-        return response.message.content.replace(/^["']|["']$/g, '') // Quitar comillas si las pone
+        let content = response.message.content.trim()
+        
+        // Limpieza agresiva de comillas y prefijos comunes si el modelo desobedece
+        content = content.replace(/^["']|["']$/g, '')
+        content = content.replace(/^(Opción \d:|Aquí tienes|Claro,|El mensaje es:)\s*/i, '')
+        
+        return content
     } catch (error) {
         console.error('❌ Error humanizando recordatorio:', error)
         return `🔔 *RECORDATORIO*\n\n${text}` // Fallback
