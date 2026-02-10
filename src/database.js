@@ -117,7 +117,309 @@ function initDatabase() {
     console.log('✅ Base de datos inicializada correctamente')
 }
 
-// ... (existing code)
+// ========== CONFIGURACIÓN ==========
+
+function getConfig(key) {
+    const stmt = db.prepare('SELECT value FROM config WHERE key = ?')
+    const row = stmt.get(key)
+    return row ? row.value : null
+}
+
+function setConfig(key, value) {
+    const stmt = db.prepare(`
+        INSERT INTO config (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `)
+    stmt.run(key, value)
+}
+
+function getAllConfig() {
+    const stmt = db.prepare('SELECT key, value FROM config')
+    const rows = stmt.all()
+    const config = {}
+    rows.forEach(row => {
+        config[row.key] = row.value
+    })
+    return config
+}
+
+// ========== WHITELIST ==========
+
+function isInWhitelist(phoneNumber) {
+    const stmt = db.prepare('SELECT 1 FROM whitelist WHERE phone_number = ?')
+    return stmt.get(phoneNumber) !== undefined
+}
+
+function addToWhitelist(phoneNumber) {
+    try {
+        const stmt = db.prepare('INSERT INTO whitelist (phone_number) VALUES (?)')
+        stmt.run(phoneNumber)
+        return true
+    } catch (error) {
+        if (error.code === 'SQLITE_CONSTRAINT' || error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+            return false // Ya existe
+        }
+        throw error
+    }
+}
+
+function removeFromWhitelist(phoneNumber) {
+    const stmt = db.prepare('DELETE FROM whitelist WHERE phone_number = ?')
+    const result = stmt.run(phoneNumber)
+    return result.changes > 0
+}
+
+function getAllWhitelist() {
+    const stmt = db.prepare('SELECT phone_number, role, added_at FROM whitelist ORDER BY added_at DESC')
+    return stmt.all()
+}
+
+function isAdmin(phoneNumber) {
+    const stmt = db.prepare('SELECT role FROM whitelist WHERE phone_number = ?')
+    const row = stmt.get(phoneNumber)
+    return row ? row.role === 'admin' : false
+}
+
+function promoteToAdmin(phoneNumber) {
+    const stmt = db.prepare("UPDATE whitelist SET role = 'admin' WHERE phone_number = ?")
+    const result = stmt.run(phoneNumber)
+    // Si no está en la whitelist, lo agregamos como admin directamente
+    if (result.changes === 0) {
+        const insert = db.prepare("INSERT INTO whitelist (phone_number, role) VALUES (?, 'admin')")
+        insert.run(phoneNumber)
+        return true
+    }
+    return result.changes > 0
+}
+
+// ========== CÓDIGOS DE ACTIVACIÓN ==========
+
+function createActivationCode(creatorId) {
+    // Generar código aleatorio de 6 caracteres (mayúsculas y números)
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const stmt = db.prepare('INSERT INTO activation_codes (code, created_by) VALUES (?, ?)')
+    stmt.run(code, creatorId)
+    return code
+}
+
+function validateActivationCode(code) {
+    const stmt = db.prepare('SELECT * FROM activation_codes WHERE code = ? AND is_used = 0')
+    return stmt.get(code.toUpperCase())
+}
+
+function useActivationCode(code, adminId) {
+    const dbCode = validateActivationCode(code)
+    if (!dbCode) return null
+
+    const stmt = db.prepare(`
+        UPDATE activation_codes 
+        SET is_used = 1, used_by = ?, used_at = (strftime('%s', 'now'))
+        WHERE code = ? AND is_used = 0
+    `)
+    const result = stmt.run(adminId, code.toUpperCase())
+    return result.changes > 0 ? dbCode.created_by : null
+}
+
+// ========== CONVERSACIONES ==========
+
+function saveMessage(chatId, role, content) {
+    const stmt = db.prepare(`
+        INSERT INTO conversations (chat_id, role, content) 
+        VALUES (?, ?, ?)
+    `)
+    stmt.run(chatId, role, content)
+}
+
+function getRecentMessages(chatId, limit = 8) {
+    const stmt = db.prepare(`
+        SELECT role, content, timestamp 
+        FROM conversations 
+        WHERE chat_id = ? 
+        ORDER BY timestamp DESC 
+        LIMIT ?
+    `)
+    const messages = stmt.all(chatId, limit)
+    
+    // Retornar en orden cronológico (más antiguo primero)
+    return messages.reverse().map(msg => ({
+        role: msg.role,
+        content: msg.content
+    }))
+}
+
+function clearConversationHistory(chatId) {
+    const stmt = db.prepare('DELETE FROM conversations WHERE chat_id = ?')
+    const result = stmt.run(chatId)
+    return result.changes
+}
+
+// ========== RECORDATORIOS ==========
+
+function createReminder(chatId, message, triggerDate = null, type = 'task') {
+    const stmt = db.prepare(`
+        INSERT INTO reminders (chat_id, message, trigger_date, type) 
+        VALUES (?, ?, ?, ?)
+    `)
+    
+    const timestamp = triggerDate ? Math.floor(triggerDate.getTime() / 1000) : null
+    const actualType = triggerDate ? 'scheduled' : 'task'
+    
+    const result = stmt.run(chatId, message, timestamp, actualType)
+    return result.lastInsertRowid
+}
+
+function getPendingReminders() {
+    const now = Math.floor(Date.now() / 1000)
+    const stmt = db.prepare(`
+        SELECT id, chat_id, message, trigger_date, type, created_at 
+        FROM reminders 
+        WHERE status = 'pending' 
+        AND type = 'scheduled'
+        AND trigger_date <= ?
+        ORDER BY trigger_date ASC
+    `)
+    return stmt.all(now)
+}
+
+function getAllReminders(chatId, includeCompleted = false) {
+    let query = `
+        SELECT id, message, trigger_date, type, status, created_at 
+        FROM reminders 
+        WHERE chat_id = ?
+    `
+    
+    if (!includeCompleted) {
+        query += ` AND status = 'pending'`
+    }
+    
+    query += ` ORDER BY 
+        CASE WHEN trigger_date IS NULL THEN 1 ELSE 0 END,
+        trigger_date ASC,
+        created_at DESC
+    `
+    
+    const stmt = db.prepare(query)
+    return stmt.all(chatId)
+}
+
+function getLastCompletedReminder(chatId) {
+    // Obtener el último recordatorio completado en los últimos 30 minutos
+    // (Para evitar posponer algo de hace días accidentalmente)
+    const limitParams = Math.floor(Date.now() / 1000) - (30 * 60) // 30 mins atrás
+    
+    const stmt = db.prepare(`
+        SELECT * FROM reminders 
+        WHERE chat_id = ? AND status = 'completed' AND trigger_date > ? 
+        ORDER BY trigger_date DESC 
+        LIMIT 1
+    `)
+    return stmt.get(chatId, limitParams)
+}
+
+function updateReminderStatus(id, status) {
+    const stmt = db.prepare('UPDATE reminders SET status = ? WHERE id = ?')
+    const result = stmt.run(status, id)
+    return result.changes > 0
+}
+
+function addDateToTask(id, triggerDate) {
+    const timestamp = Math.floor(triggerDate.getTime() / 1000)
+    const stmt = db.prepare(`
+        UPDATE reminders 
+        SET trigger_date = ?, type = 'scheduled' 
+        WHERE id = ? AND type = 'task'
+    `)
+    const result = stmt.run(timestamp, id)
+    return result.changes > 0
+}
+
+function updateReminderDate(id, triggerDate) {
+    const timestamp = Math.floor(triggerDate.getTime() / 1000)
+    const stmt = db.prepare(`
+        UPDATE reminders 
+        SET trigger_date = ?, type = 'scheduled' 
+        WHERE id = ?
+    `)
+    const result = stmt.run(timestamp, id)
+    return result.changes > 0
+}
+
+function deleteReminder(id) {
+    const stmt = db.prepare('DELETE FROM reminders WHERE id = ?')
+    const result = stmt.run(id)
+    return result.changes > 0
+}
+
+// ========== MEMORIA INTELIGENTE ==========
+
+function saveMemory(chatId, content, category = 'general', confidence = 100, context = null) {
+    const stmt = db.prepare(`
+        INSERT INTO memories (chat_id, content, category, confidence, conversation_context) 
+        VALUES (?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(chatId, content, category, confidence, context)
+    return result.lastInsertRowid
+}
+
+function getMemories(chatId, limit = 20) {
+    const stmt = db.prepare(`
+        SELECT id, content, category, created_at 
+        FROM memories 
+        WHERE chat_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+    `)
+    return stmt.all(chatId, limit)
+}
+
+function searchMemories(chatId, query) {
+    // Búsqueda simple por texto (se podría mejorar con FTS5 si fuera necesario)
+    const stmt = db.prepare(`
+        SELECT id, content, category 
+        FROM memories 
+        WHERE chat_id = ? AND content LIKE ?
+        ORDER BY updated_at DESC
+    `)
+    return stmt.all(chatId, `%${query}%`)
+}
+
+function updateMemory(id, newContent, newConfidence) {
+    const stmt = db.prepare(`
+        UPDATE memories 
+        SET content = ?, confidence = ?, updated_at = (strftime('%s', 'now')) 
+        WHERE id = ?
+    `)
+    const result = stmt.run(newContent, newConfidence, id)
+    return result.changes > 0
+}
+
+function deleteMemory(id) {
+    const stmt = db.prepare('DELETE FROM memories WHERE id = ?')
+    const result = stmt.run(id)
+    return result.changes > 0
+}
+
+function countMemories(chatId) {
+    const stmt = db.prepare('SELECT COUNT(*) as count FROM memories WHERE chat_id = ?')
+    const row = stmt.get(chatId)
+    return row ? row.count : 0
+}
+
+// ========== ESTADÍSTICAS ==========
+
+function getStats() {
+    const totalMessages = db.prepare('SELECT COUNT(*) as count FROM conversations').get().count
+    const totalReminders = db.prepare("SELECT COUNT(*) as count FROM reminders WHERE status = 'pending'").get().count
+    const whitelistCount = db.prepare('SELECT COUNT(*) as count FROM whitelist').get().count
+    const totalMemories = db.prepare('SELECT COUNT(*) as count FROM memories').get().count
+    
+    return {
+        totalMessages,
+        totalReminders,
+        whitelistCount,
+        totalMemories
+    }
+}
 
 // ========== GOOGLE CALENDAR ==========
 
@@ -162,7 +464,7 @@ module.exports = {
     getAllWhitelist,
     saveMessage,
     getRecentMessages,
-    getConversationHistory: getRecentMessages,
+    getConversationHistory: getRecentMessages, // Alias para compatibilidad
     clearConversationHistory,
     createReminder,
     getPendingReminders,
