@@ -106,6 +106,7 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 | -------------- | ------------------------------------------------------------------ |
 | `/menu`        | Muestra la lista de comandos disponibles                           |
 | `/tareas`      | Lista tus recordatorios pendientes                                 |
+| `/calendario`  | Gestión de Google Calendar (conectar, listar, agregar)             |
 | `/borrar [ID]` | Elimina una tarea específica                                       |
 | `/limpiar`     | Borra el historial de conversación con la IA (reinicio de memoria) |
 | `/modelo [N]`  | Cambia el modelo de IA o lista los disponibles (admin)             |
@@ -114,6 +115,22 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 | `/inactivar`   | Remueve el acceso de un usuario (admin)                            |
 
 > **Nota:** Los comandos marcados como `(admin)` requieren que el usuario tenga el rol de administrador. Usa `node scripts/set-admin.js` para asignarlo.
+
+### 📅 Integración con Google Calendar
+
+Para usar el comando `/calendario`, debes configurar las credenciales de Google OAuth 2.0.
+
+1.  Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/).
+2.  Habilita la **Google Calendar API**.
+3.  Crea credenciales de tipo **OAuth Client ID**.
+4.  Agrega las siguientes variables a tu archivo `.env`:
+
+```env
+GOOGLE_CLIENT_ID=tu_cliente_id_de_google
+GOOGLE_CLIENT_SECRET=tu_secreto_de_google
+```
+
+Una vez configurado, usa `/calendario conectar` en WhatsApp para vincular tu cuenta.
 
 ## 📂 Estructura del Proyecto
 

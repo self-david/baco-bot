@@ -3,6 +3,7 @@ const database = require('./database')
 const reminders = require('./reminders')
 const utils = require('./utils')
 const aiProcessor = require('./ai-processor')
+const calendarService = require('./calendar-service')
 
 async function processCommand(message, chatId, client) {
     const texto = message.body.trim()
@@ -97,6 +98,10 @@ async function processCommand(message, chatId, client) {
             case 'fecha':
             case 'f':
                 return handleAgregarFecha(args, chatId)
+                
+            case 'calendario':
+            case 'cal':
+                return await handleCalendario(args, chatId)
 
             case 'limpiar':
                 return handleLimpiar(chatId)
@@ -277,6 +282,76 @@ function handleWhitelist(args, chatId) {
         default:
             return `❌ Subcomando desconocido: ${subcommand}\n\nUsa: add, remove o list`
     }
+}
+
+// ========== GOOGLE CALENDAR ==========
+
+async function handleCalendario(args, chatId) {
+    const subcomando = args[0] ? args[0].toLowerCase() : 'menu'
+    
+    // 1. Verificar autenticación (excepto para conectar/codigo)
+    const isAuth = calendarService.isUserAuthenticated(chatId)
+    
+    if (subcomando === 'conectar') {
+        const url = calendarService.getAuthUrl()
+        return `🔗 *Vincula tu Google Calendar*\n\n1. Abre este link: ${url}\n2. Autoriza la aplicación.\n3. Copia el código que te dan.\n4. Escribe aquí:\n\`/calendario codigo TU_CODIGO_AQUI\``
+    }
+    
+    if (subcomando === 'codigo') {
+        const code = args[1]
+        if (!code) return '❌ Debes pegar el código.\nEjemplo: `/calendario codigo 4/0AeaY...`'
+        
+        try {
+            await calendarService.redeemCode(chatId, code)
+            return '✅ *¡Conexión exitosa!*\nAhora puedes usar `/calendario listar` o pedirme agregar eventos.'
+        } catch (error) {
+            return '❌ Error al vincular: Código inválido o expirado.'
+        }
+    }
+    
+    if (!isAuth) {
+        return '⚠️ *No estás conectado a Google Calendar*\n\nUsa `/calendario conectar` para empezar.'
+    }
+    
+    if (subcomando === 'listar' || subcomando === 'eventos') {
+        try {
+            const events = await calendarService.listUpcomingEvents(chatId)
+            if (!events || events.length === 0) return '📅 No tienes próximos eventos.'
+            
+            let response = '📅 *Próximos Eventos:*\n\n'
+            events.forEach((ev, i) => {
+                const start = ev.start.dateTime || ev.start.date
+                const dateStr = new Date(start).toLocaleString('es-ES', { 
+                    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                })
+                response += `${i+1}. *${ev.summary}*\n   🕒 ${dateStr}\n\n`
+            })
+            return response
+        } catch (error) {
+            return '❌ Error obteniendo eventos. Tu sesión puede haber expirado. Intenta `/calendario conectar` de nuevo.'
+        }
+    }
+    
+    if (subcomando === 'agregar' || subcomando === 'crear') {
+        const text = args.slice(1).join(' ')
+        if (!text) return '❌ Dime qué agregar.\nEjemplo: `/calendario agregar Cena mañana a las 8pm`'
+        
+        try {
+            // Intento de Quick Add
+            const event = await calendarService.quickAddEvent(chatId, text)
+            return `✅ *Evento Creado*\n\n📝 ${event.summary}\n🔗 [Ver en Calendar](${event.htmlLink})`
+        } catch (error) {
+             return '❌ No pude crear el evento.'
+        }
+    }
+
+    if (subcomando === 'desconectar') {
+        database.deleteGoogleCredentials(chatId)
+        return '👋 Te has desconectado de Google Calendar.'
+    }
+    
+    // Menú Principal
+    return `📅 *Google Calendar Bot*\n\nEstado: ${isAuth ? '✅ Conectado' : '❌ Desconectado'}\n\nComandos:\n- \`/calendario conectar\`\n- \`/calendario listar\`\n- \`/calendario agregar [texto]\`\n- \`/calendario desconectar\``
 }
 
 // ========== COMANDOS DE RECORDATORIOS ==========
