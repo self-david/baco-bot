@@ -82,34 +82,28 @@ async function sendDailySummary(chatId) {
     endOfWeek.setHours(23, 59, 59, 999)
 
     try {
-        // Obtener eventos
-        // Usamos la función que acabamos de crear (aunque la llamé listEventsForTimeRange, necesito ver si la exporté bien)
-        // Sí, la exporté.
-        
-        // Para evitar llamadas dobles a la API, pidamos todos los de la semana y filtramos en memoria.
+        console.log(`🔍 Buscando eventos para ${chatId} de ${startOfDay.toISOString()} a ${endOfWeek.toISOString()}`)
         const allWeekEvents = await calendarService.listEventsForTimeRange(chatId, startOfDay, endOfWeek)
         
         if (!allWeekEvents || allWeekEvents.length === 0) {
-            // "si no hay eventos esta semana entonces no se envia el mensaje"
+            console.log(`ℹ️ No se encontraron eventos esta semana para ${chatId}`)
             return
         }
 
-        // Filtrar eventos de HOY
+        console.log(`📊 Encontrados ${allWeekEvents.length} eventos en total para la semana.`)
+
         const todayEvents = allWeekEvents.filter(ev => {
             const evStart = new Date(ev.start.dateTime || ev.start.date)
             return evStart >= startOfDay && evStart <= endOfDay
         })
 
-        // Filtrar el resto de la semana (excluyendo hoy)
         const weekEvents = allWeekEvents.filter(ev => {
             const evStart = new Date(ev.start.dateTime || ev.start.date)
             return evStart > endOfDay && evStart <= endOfWeek
         })
 
-        // Lógica de envío:
-        // "si el unico evento de esta semana es el mismo dia ... que solo mande el mensaje de eventos del dia"
-        
-        // Mensaje 1: Eventos de Hoy
+        console.log(`✅ Hoy: ${todayEvents.length}, Resto semana: ${weekEvents.length}`)
+
         if (todayEvents.length > 0) {
             let msgToday = `📅 *Tu Agenda de Hoy:*\n\n`
             todayEvents.forEach((ev, i) => {
@@ -117,14 +111,11 @@ async function sendDailySummary(chatId) {
                 const timeStr = isAllDay(ev) ? 'Todo el día' : start.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
                 msgToday += `• ${timeStr} - *${ev.summary}*\n`
             })
-            await client.sendMessage(chatId, msgToday)
+            await safeSendMessage(chatId, msgToday, 'HOY')
         }
 
-        // Mensaje 2: Eventos de la Semana
         if (weekEvents.length > 0) {
             let msgWeek = `🗓️ *Resto de la Semana:*\n\n`
-            
-            // Agrupar por día para que se vea bonito
             let currentDayStr = ''
             
             weekEvents.forEach(ev => {
@@ -139,12 +130,27 @@ async function sendDailySummary(chatId) {
                 
                 msgWeek += `   • ${timeStr} - ${ev.summary}\n`
             })
-            
-            await client.sendMessage(chatId, msgWeek)
+            await safeSendMessage(chatId, msgWeek, 'SEMANA')
         }
 
     } catch (error) {
-        console.error(`Error enviando resumen a ${chatId}:`, error)
+        console.error(`❌ Error enviando resumen a ${chatId}:`, error)
+    }
+}
+
+async function safeSendMessage(chatId, message, type) {
+    try {
+        console.log(`📤 Intentando enviar resumen (${type}) a ${chatId}...`)
+        const chat = await client.getChatById(chatId)
+        if (chat) {
+            await chat.sendMessage(message)
+            console.log(`✅ Resumen (${type}) enviado vía chat.sendMessage a ${chatId}`)
+        } else {
+            await client.sendMessage(chatId, message)
+            console.log(`✅ Resumen (${type}) enviado vía client.sendMessage a ${chatId}`)
+        }
+    } catch (error) {
+        console.error(`❌ Falló envío de resumen (${type}) a ${chatId}:`, error)
     }
 }
 
