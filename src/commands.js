@@ -103,6 +103,9 @@ async function processCommand(message, chatId, client) {
             case 'cal':
                 return await handleCalendario(args, chatId)
 
+            case 'resumen':
+                return handleResumen(args, chatId)
+
             case 'limpiar':
                 return handleLimpiar(chatId)
 
@@ -352,6 +355,27 @@ async function handleCalendario(args, chatId) {
     
     // Menú Principal
     return `📅 *Google Calendar Bot*\n\nEstado: ${isAuth ? '✅ Conectado' : '❌ Desconectado'}\n\nComandos:\n- \`/calendario conectar\`\n- \`/calendario listar\`\n- \`/calendario agregar [texto]\`\n- \`/calendario desconectar\``
+}
+
+function handleResumen(args, chatId) {
+    if (args.length === 0) {
+        const currentTime = database.getUserSetting(chatId, 'daily_summary_time', '07:00')
+        return `📅 *Resumen Diario*\n\nTu horario actual de reporte es: *${currentTime}*\n\nPara cambiarlo usa: \`/resumen HH:MM\`\nEjemplo: \`/resumen 08:30\``
+    }
+
+    const time = args[0]
+    // Validar formato HH:MM
+    if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+        return '❌ Formato inválido. Usa HH:MM (ej: 07:00, 14:30, 20:00)'
+    }
+
+    // Normalizar a HH:MM (por si ponen 7:00 -> 07:00)
+    const [h, m] = time.split(':')
+    const normalizedTime = `${h.padStart(2, '0')}:${m}`
+
+    database.setUserSetting(chatId, 'daily_summary_time', normalizedTime)
+    
+    return `✅ *Horario actualizado*\n\nRecibirás tu resumen de eventos todos los días a las *${normalizedTime}*.`
 }
 
 // ========== COMANDOS DE RECORDATORIOS ==========

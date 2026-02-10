@@ -6,6 +6,7 @@ const database = require('./src/database')
 const reminders = require('./src/reminders')
 const commands = require('./src/commands')
 const aiProcessor = require('./src/ai-processor')
+const dailySummary = require('./src/daily-summary')
 
 // Detectar sistema operativo
 const esWindows = process.platform === 'win32'
@@ -121,6 +122,9 @@ client.on('ready', () => {
     
     // Iniciar sistema de recordatorios
     reminders.initReminders(client)
+
+    // Iniciar resumen diario
+    dailySummary.init(client)
 })
 
 // ========== MANEJO DE MENSAJES ==========

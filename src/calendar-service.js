@@ -89,6 +89,27 @@ async function listUpcomingEvents(chatId, maxResults = 5) {
     }
 }
 
+async function listEventsForTimeRange(chatId, timeMin, timeMax) {
+    const auth = await getAuthenticatedClient(chatId)
+    if (!auth) return []
+    
+    const calendar = google.calendar({ version: 'v3', auth })
+    
+    try {
+        const res = await calendar.events.list({
+            calendarId: 'primary',
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+        })
+        return res.data.items || []
+    } catch (error) {
+        console.error('Error obteniendo rango de eventos:', error)
+        return []
+    }
+}
+
 async function quickAddEvent(chatId, text) {
     const auth = await getAuthenticatedClient(chatId)
     if (!auth) return null
@@ -130,6 +151,7 @@ module.exports = {
     getAuthUrl,
     redeemCode,
     listUpcomingEvents,
+    listEventsForTimeRange,
     quickAddEvent,
     createEvent,
     isUserAuthenticated: (chatId) => !!database.getGoogleCredentials(chatId)

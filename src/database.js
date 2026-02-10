@@ -114,6 +114,16 @@ function initDatabase() {
         )
     `)
 
+    // Tabla de configuraciones de usuario (prefencias)
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+            chat_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY (chat_id, key)
+        )
+    `)
+
     console.log('✅ Base de datos inicializada correctamente')
 }
 
@@ -141,6 +151,30 @@ function getAllConfig() {
         config[row.key] = row.value
     })
     return config
+}
+
+// ========== PREFERENCIAS DE USUARIO ==========
+
+function getUserSetting(chatId, key, defaultValue = null) {
+    const stmt = db.prepare('SELECT value FROM user_settings WHERE chat_id = ? AND key = ?')
+    const row = stmt.get(chatId, key)
+    return row ? row.value : defaultValue
+}
+
+function setUserSetting(chatId, key, value) {
+    const stmt = db.prepare(`
+        INSERT INTO user_settings (chat_id, key, value) VALUES (?, ?, ?)
+        ON CONFLICT(chat_id, key) DO UPDATE SET value = excluded.value
+    `)
+    const result = stmt.run(chatId, key, value)
+    return result.changes > 0
+}
+
+function getAllUsersWithSetting(key) {
+    // Retorna todos los usuarios que tienen una configuración específica
+    // Útil para iterar sobre todos los que tienen activado el resumen diario
+    const stmt = db.prepare('SELECT chat_id, value FROM user_settings WHERE key = ?')
+    return stmt.all(key)
 }
 
 // ========== WHITELIST ==========
@@ -488,5 +522,8 @@ module.exports = {
     useActivationCode,
     saveGoogleCredentials,
     getGoogleCredentials,
-    deleteGoogleCredentials
+    deleteGoogleCredentials,
+    getUserSetting,
+    setUserSetting,
+    getAllUsersWithSetting
 }

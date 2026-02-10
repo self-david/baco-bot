@@ -107,6 +107,7 @@ Aunque el bot entiende lenguaje natural, también tiene comandos directos:
 | `/menu`        | Muestra la lista de comandos disponibles                           |
 | `/tareas`      | Lista tus recordatorios pendientes                                 |
 | `/calendario`  | Gestión de Google Calendar (conectar, listar, agregar)             |
+| `/resumen [H]` | Configura la hora del resumen diario (ej: /resumen 07:00)          |
 | `/borrar [ID]` | Elimina una tarea específica                                       |
 | `/limpiar`     | Borra el historial de conversación con la IA (reinicio de memoria) |
 | `/modelo [N]`  | Cambia el modelo de IA o lista los disponibles (admin)             |
@@ -140,6 +141,12 @@ GOOGLE_CLIENT_SECRET=tu_secreto_de_google
     - Si sale un aviso de "App no veridificada", haz clic en **Configuración avanzada** > **Ir a [Nombre App] (no seguro)**.
     - Copia el código resultante y envíalo: `/calendario codigo TU_CODIGO`.
 
+7.  **Resumen Diario:**
+    - El bot enviará automáticamente un resumen de tus eventos a las **07:00 AM**.
+    - Puedes cambiar esta hora con el comando `/resumen HH:MM` (ej: `/resumen 08:30`).
+    - Si no hay eventos esa semana, no se enviará ningún mensaje.
+    - El resumen incluye eventos de hoy y del resto de la semana como mensajes independientes.
+
 ---
 
 ## 📂 Estructura del Proyecto
@@ -149,6 +156,7 @@ GOOGLE_CLIENT_SECRET=tu_secreto_de_google
 - `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, credenciales Google).
 - `src/ai-processor.js`: Lógica para interactuar con Ollama y analizar intenciones.
 - `src/reminders.js`: Motor de recordatorios y gestión de estados.
+- `src/daily-summary.js`: Servicio de resúmenes diarios programados.
 - `src/commands.js`: Procesador de comandos explícitos (`/`).
 - `scripts/`: Herramientas de utilidad (init, migrate, whitelist-cli).
 
