@@ -68,7 +68,7 @@ async function processCommand(message, chatId, client) {
                 
             case 'modelo':
                 if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
-                return handleModelo(args)
+                return await handleModelo(args)
                 
             case 'whitelist':
             case 'lista':
@@ -78,11 +78,11 @@ async function processCommand(message, chatId, client) {
                 return handleWhitelist(args, chatId)
                 
             case 'recordar':
-                return handleRecordar(args, chatId)
+                return await handleRecordar(args, chatId)
                 
             case 'tarea':
             case 't':
-                return handleTarea(args, chatId)
+                return await handleTarea(args, chatId)
                 
             case 'recordatorios':
             case 'tareas':
@@ -281,34 +281,25 @@ function handleWhitelist(args, chatId) {
 
 // ========== COMANDOS DE RECORDATORIOS ==========
 
-function handleRecordar(args, chatId) {
+async function handleRecordar(args, chatId) {
     if (args.length === 0) {
         return '❌ Debes proporcionar un mensaje para recordar\n\nEjemplo: /recordar Comprar leche en 2 horas'
     }
     
     const texto = args.join(' ')
+    const model = database.getConfig('modelo')
     
-    // Intentar extraer tiempo del texto
-    const patterns = [
-        /(.+?)\s+(en|el)\s+(.+)/i,
-        /(.+)/i
-    ]
-    
-    let message = texto
-    let timeExpression = null
-    
-    for (const pattern of patterns) {
-        const match = texto.match(pattern)
-        if (match) {
-            if (match[3]) {
-                message = match[1].trim()
-                timeExpression = match[3].trim()
-            } else {
-                message = match[1].trim()
-            }
-            break
-        }
+    // Usar IA para parsing si hay modelo, sino fallback a utils
+    let extracted
+    if (model) {
+        console.log('🤖 Usando IA para interpretar recordatorio...')
+        extracted = await aiProcessor.parseReminderWithAI(texto, model)
+    } else {
+        extracted = utils.extractReminderFromText(texto)
     }
+    
+    const message = extracted.message || texto
+    const timeExpression = extracted.timeExpression || null
     
     try {
         const result = reminders.createReminder(chatId, message, timeExpression)
@@ -323,15 +314,37 @@ function handleRecordar(args, chatId) {
     }
 }
 
-function handleTarea(args, chatId) {
+async function handleTarea(args, chatId) {
     if (args.length === 0) {
         return '❌ Debes proporcionar una descripción para la tarea\n\nEjemplo: /tarea Revisar documentos pendientes'
     }
     
-    const message = args.join(' ')
-    const result = reminders.createReminder(chatId, message, null)
+    const texto = args.join(' ')
+    const model = database.getConfig('modelo')
+
+    let extracted
+    if (model) {
+        console.log('🤖 Usando IA para interpretar tarea...')
+        extracted = await aiProcessor.parseReminderWithAI(texto, model)
+    } else {
+        extracted = utils.extractReminderFromText(texto)
+    }
     
-    return `✅ Tarea creada\n\n💬 ${message}\n🆔 ID: ${result.id}\n\n💡 Usa /fecha ${result.id} [fecha] para agregar fecha`
+    const message = extracted.message || texto
+    const timeExpression = extracted.timeExpression || null
+    
+    try {
+        // createReminder maneja null timeExpression creando una 'task' normal
+        const result = reminders.createReminder(chatId, message, timeExpression)
+        
+        if (result.type === 'scheduled') {
+             return `✅ Tarea programada\n\n📅 ${utils.formatDate(result.triggerDate)}\n💬 ${message}\n🆔 ID: ${result.id}`
+        } else {
+            return `✅ Tarea creada\n\n💬 ${message}\n🆔 ID: ${result.id}\n\n💡 Usa /fecha ${result.id} [fecha] para agregar fecha`
+        }
+    } catch (error) {
+         return `❌ Error creando tarea: ${error.message}`
+    }
 }
 
 function handleListarRecordatorios(chatId) {

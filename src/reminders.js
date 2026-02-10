@@ -14,22 +14,45 @@ function initReminders(whatsappClient) {
     console.log('✅ Sistema de recordatorios activo (Check cada 10s)')
 }
 
+const processingReminders = new Set()
+
 async function checkReminders() {
     try {
         const pendingReminders = database.getPendingReminders()
         
-        if (pendingReminders.length > 0) {
-            console.log(`🔍 Encontrados ${pendingReminders.length} recordatorios pendientes de envío.`)
+        // Filtrar los que ya se están procesando
+        const toProcess = pendingReminders.filter(r => !processingReminders.has(r.id))
+        
+        if (toProcess.length > 0) {
+            console.log(`🔍 Encontrados ${toProcess.length} recordatorios pendientes de envío.`)
         }
 
-        for (const reminder of pendingReminders) {
-            console.log(`⚡ Procesando recordatorio ID ${reminder.id}...`)
-            await sendReminder(reminder)
-            database.updateReminderStatus(reminder.id, 'completed')
-            console.log(`🏁 Recordatorio ID ${reminder.id} marcado como completado.`)
+        for (const reminder of toProcess) {
+            // Marcar como procesando
+            processingReminders.add(reminder.id)
+            
+            // Ejecutar en "segundo plano" (sin await) para no bloquear el loop si uno tarda mucho?
+            // MEJOR: Usar await para no saturar, pero el lock ya protege de re-entradas.
+            // Si usamos await, el loop se pausa, pero el setInterval sigue disparando cada 10s.
+            // El lock es crucial aquí.
+            
+            processReminderSafe(reminder).finally(() => {
+                processingReminders.delete(reminder.id)
+            })
         }
     } catch (error) {
         console.error('❌ Error verificando recordatorios:', error)
+    }
+}
+
+async function processReminderSafe(reminder) {
+    try {
+        console.log(`⚡ Procesando recordatorio ID ${reminder.id}...`)
+        await sendReminder(reminder)
+        database.updateReminderStatus(reminder.id, 'completed')
+        console.log(`🏁 Recordatorio ID ${reminder.id} marcado como completado.`)
+    } catch (error) {
+        console.error(`❌ Error procesando recordatorio ${reminder.id}:`, error)
     }
 }
 

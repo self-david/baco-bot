@@ -276,6 +276,41 @@ async function listOllamaModels() {
     }
 }
 
+async function parseReminderWithAI(text, model) {
+    try {
+        const prompt = [
+            { role: 'system', content: 'Eres un analizador de texto experto. Tu tarea es extraer la intención de un recordatorio o tarea.\n\nAnaliza el texto y devuelve UNICAMENTE un objeto JSON.\n\nCampos requeridos:\n- "message": La tarea o acción a realizar, LIMPIA de saludos, prefijos ("recuérdame", "tengo que") y de la fecha.\n- "timeExpression": El fragmento de texto que indica CUÁNDO (ej: "mañana a las 5", "en 10 mins"). Si no hay, usa null.\n- "confidence": Nivel de confianza (0.0 a 1.0).\n\nEjemplo Entrada: "Oye baco por fa recuérdame sacar la basura en 10 minutos"\nEjemplo Salida JSON: { "message": "sacar la basura", "timeExpression": "en 10 minutos", "confidence": 0.99 }' },
+            { role: 'user', content: text }
+        ]
+
+        const response = await ollama.chat({
+            model: model,
+            messages: prompt,
+            format: 'json',
+            keep_alive: '10m',
+            options: {
+                temperature: 0.1 // Muy baja temperatura para precisión
+            }
+        })
+        
+        const result = JSON.parse(response.message.content)
+        
+        // Validación básica
+        if (!result.message) result.message = text
+        
+        return result
+
+    } catch (error) {
+        console.error('❌ Error en parsing IA:', error)
+        // Fallback robusto: devolver el texto original con confianza 0
+        return {
+            message: text,
+            timeExpression: null,
+            confidence: 0
+        }
+    }
+}
+
 module.exports = {
     generateResponse,
     analyzeReminderIntent,
@@ -284,5 +319,6 @@ module.exports = {
     analyzePostponeIntent,
     processMemory,
     listOllamaModels,
-    unloadModel
+    unloadModel,
+    parseReminderWithAI
 }

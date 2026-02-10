@@ -236,7 +236,7 @@ function formatRemindersList(reminders) {
         
         tasks.forEach((r) => {
             const emoji = r.id <= 9 ? numberEmojis[r.id] : `*[${r.id}]*`
-            message += `${emoji} ${r.message}\n\n`
+            message += `${emoji} ${r.message}\n`
         })
     }
     
