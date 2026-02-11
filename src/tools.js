@@ -86,37 +86,37 @@ HERRAMIENTAS DISPONIBLES:
 
 Tienes acceso a las siguientes funciones. Para usarlas, responde EXACTAMENTE en este formato JSON:
 
-{"function": "nombre_funcion", "params": {"param1": "valor1", "param2": "valor2"}}
+{{"function": "nombre_funcion", "params": {{"param1": "valor1", "param2": "valor2"}}}}
 
 **crear_recordatorio**
 - Descripción: Crea un recordatorio o tarea
 - Parámetros:
   * mensaje (string, requerido): El mensaje del recordatorio
   * tiempo (string, opcional): Expresión temporal como "mañana a las 15:00", "en 2 horas", "el viernes"
-- Ejemplo: {"function": "crear_recordatorio", "params": {"mensaje": "Hacer ejercicio", "tiempo": "mañana a las 7am"}}
+- Ejemplo: {{"function": "crear_recordatorio", "params": {{"mensaje": "Hacer ejercicio", "tiempo": "mañana a las 7am"}}}}
 
-**list ar_recordatorios**
+**listar_recordatorios**
 - Descripción: Lista los recordatorios pendientes
 - Parámetros: ninguno
-- Ejemplo: {"function": "listar_recordatorios", "params": {}}
+- Ejemplo: {{"function": "listar_recordatorios", "params": {{}}}}
 
 **borrar_recordatorio**
 - Descripción: Elimina un recordatorio por ID
 - Parámetros:
   * id (number, requerido): ID del recordatorio
-- Ejemplo: {"function": "borrar_recordatorio", "params": {"id": 5}}
+- Ejemplo: {{"function": "borrar_recordatorio", "params": {{"id": 5}}}}
 
 **listar_eventos_calendario**
 - Descripción: Muestra los próximos eventos del calendario
 - Parámetros:
   * cantidad (number, opcional, default 5): Número de eventos
-- Ejemplo: {"function": "listar_eventos_calendario", "params": {"cantidad": 10}}
+- Ejemplo: {{"function": "listar_eventos_calendario", "params": {{"cantidad": 10}}}}
 
 **crear_evento_calendario**
 - Descripción: Crea un evento en Google Calendar
 - Parámetros:
   * texto (string, requerido): Descripción natural del evento
-- Ejemplo: {"function": "crear_evento_calendario", "params": {"texto": "Reunión con Juan mañana a las 3pm"}}
+- Ejemplo: {{"function": "crear_evento_calendario", "params": {{"texto": "Reunión con Juan mañana a las 3pm"}}}}
 
 SI el usuario pide algo que requiere una de estas funciones, responde SOLO con el JSON. En caso contrario, responde normalmente.
 `
