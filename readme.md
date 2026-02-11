@@ -42,7 +42,9 @@ Clona el repositorio e instala las dependencias:
 ```bash
 git clone https://github.com/self-david/baco-bot.git
 cd baco-bot
-npm install
+
+# Si hay conflictos de dependencias, usa --legacy-peer-deps
+npm install --legacy-peer-deps
 ```
 
 ### 2. Configuración de IA (Ollama)
@@ -62,6 +64,9 @@ ollama pull nomic-embed-text  # Requerido para memoria vectorial (RAG)
 Primero, activa el comando globalmente (solo una vez):
 
 ```bash
+# Permisos para Linux/Server
+chmod +x bin/asistente.js
+
 npm link
 ```
 
@@ -93,13 +98,37 @@ Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comando
 - **Eliminar usuario:** `baco-bot whitelist remove 521xxxxxxxx@c.us`
 - **Promover a Administrador:** `node scripts/set-admin.js 521xxxxxxxx@c.us`
 
-### 5. Configuración Inicial (Wizard)
-
-Puedes configurar el nombre y personalidad del bot interactivamente:
-
 ```bash
 baco-bot init
 ```
+
+---
+
+## 🛠 Solución de Problemas Comunes
+
+### 1. Error de Dependencias (ERRESOLVE)
+
+Si al instalar dependencias ves un error de `zod` o `peer dependencies`:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+### 2. Permiso Denegado (CLI)
+
+Si al ejecutar `baco-bot` recibes `Permission denied`:
+
+```bash
+chmod +x bin/asistente.js
+npm link
+```
+
+### 3. Navegador ya en uso
+
+Si el bot falla diciendo que Chrome ya está abierto:
+
+- **Windows:** `taskkill /F /IM chrome.exe /T`
+- **Linux:** `pkill chrome` o `pkill chromium`
 
 ## 🔧 Comandos del Bot (En WhatsApp)
 
