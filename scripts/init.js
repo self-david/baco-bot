@@ -88,6 +88,30 @@ async function main() {
         modelos = [manualModel]
     }
     
+    // 1.5 Verificar y descargar modelo de embeddings (nomic-embed-text)
+    console.log('\n⏳ Verificando modelo de embeddings para RAG...')
+    try {
+        const hasEmbedModel = modelos.some(m => m.includes('nomic-embed-text'))
+        if (!hasEmbedModel) {
+            console.log('📥 Descargando nomic-embed-text (requerido para memoria vectorial)...')
+            console.log('   Esto puede tomar unos minutos...')
+            
+            // Ejecutar ollama pull de forma síncrona
+            execSync('ollama pull nomic-embed-text', { 
+                stdio: 'inherit', // Mostrar progreso en tiempo real
+                timeout: 300000 // 5 minutos de timeout
+            })
+            
+            console.log('✅ Modelo de embeddings descargado correctamente')
+        } else {
+            console.log('✅ Modelo de embeddings ya instalado')
+        }
+    } catch (error) {
+        console.error('\n⚠️ No se pudo descargar nomic-embed-text automáticamente')
+        console.log('👉 Descárgalo manualmente cuando sea posible: ollama pull nomic-embed-text')
+        console.log('   (El bot funcionará, pero la memoria vectorial estará deshabilitada hasta entonces)\n')
+    }
+    
     // 2. Preguntas de configuración
     const respuestas = await inquirer.prompt([
         {

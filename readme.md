@@ -6,9 +6,10 @@ Este es un bot avanzado de WhatsApp que utiliza Inteligencia Artificial (Ollama)
 
 ### 🧠 Inteligencia Artificial
 
-- **Conversación Natural:** Utiliza modelos locales (como Gemma 3, Llama 3) vía Ollama.
-- **Memoria de Contexto:** Recuerda los últimos mensajes de la conversación para mantener el hilo.
-- **Personalidad Configurable:** Puedes definir quién es, cómo habla y su nombre.
+- **Conversación Natural:** Utiliza modelos locales (como Gemma 3, Llama 3) vía Ollama con arquitectura LangChain.
+- **Memoria Vectorial (RAG):** Búsqueda semántica de recuerdos relevantes para contexto inteligente.
+- **Historial Persistente:** Guarda automáticamente conversaciones en SQLite para continuidad entre sesiones.
+- **Personalidad Configurable:** Define quién es, cómo habla y su nombre.
 
 ### 📅 Sistema de Recordatorios Inteligentes
 
@@ -50,9 +51,11 @@ Solo necesitas descargar el modelo que desees usar:
 
 ```bash
 ollama pull gemma3:1b
+ollama pull nomic-embed-text  # Requerido para memoria vectorial (RAG)
 ```
 
 > **Nota:** Puedes usar cualquier modelo que tengas en Ollama. Configúralo desde WhatsApp con el comando `/modelo`.
+> El modelo `nomic-embed-text` es necesario para la memoria vectorial y se descargará automáticamente durante `baco-bot init` si no lo tienes.
 
 ### 3. Ejecución
 
@@ -152,9 +155,11 @@ GOOGLE_CLIENT_SECRET=tu_secreto_de_google
 ## 📂 Estructura del Proyecto
 
 - `index.js`: Punto de entrada principal. Maneja la conexión de WhatsApp.
+- `src/ai-processor.js`: Motor de IA con LangChain + RAG para memoria inteligente.
+- `src/langchain-adapter.js`: Adaptador que conecta LangChain con SQLite.
+- `src/vector-store.js`: Gestión de memoria vectorial (HNSWLib + embeddings).
+- `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, credenciales).
 - `src/calendar-service.js`: Gestión de Google Calendar API y OAuth.
-- `src/database.js`: Gestión de base de datos SQLite (conversaciones, tareas, credenciales Google).
-- `src/ai-processor.js`: Lógica para interactuar con Ollama y analizar intenciones.
 - `src/reminders.js`: Motor de recordatorios y gestión de estados.
 - `src/daily-summary.js`: Servicio de resúmenes diarios programados.
 - `src/commands.js`: Procesador de comandos explícitos (`/`).

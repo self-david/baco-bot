@@ -1,245 +1,184 @@
-const { Ollama } = require('ollama')
+const { ChatOllama } = require('@langchain/ollama')
+const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/prompts')
+const { RunnableWithMessageHistory } = require('@langchain/core/runnables')
+const { StringOutputParser } = require('@langchain/core/output_parsers')
+const { HumanMessage, SystemMessage } = require('@langchain/core/messages')
+const { SQLiteHistory } = require('./langchain-adapter')
+const vectorMemory = require('./vector-store') // Nueva memoria vectorial
+
+const { Ollama } = require('ollama') // Mantener para funciones legacy por ahora
 const database = require('./database')
 const utils = require('./utils')
 
-const ollama = new Ollama({ host: 'http://127.0.0.1:11434' })
+// Cliente legacy para funciones auxiliares (se puede migrar después)
+const ollamaLegacy = new Ollama({ host: 'http://127.0.0.1:11434' })
 
 const OLLAMA_OPTIONS = {
     num_ctx: 4096,
     temperature: 0.7
 }
 
-async function generateResponse(chatId, userMessage, personality, model) {
+/**
+ * Genera una respuesta usando LangChain con manejo de historial y RAG.
+ */
+async function generateResponse(chatId, userMessage, personality, modelName) {
     try {
-        // Guardar mensaje del usuario
-        database.saveMessage(chatId, 'user', userMessage)
-        
-        // Obtener historial reciente (reducido a 4 para dar prioridad a la instrucción actual y evitar ruido viejo)
-        const recentMessages = database.getRecentMessages(chatId, 6)
-        
-        // Obtener nombre para el anchor
+        // 1. Configurar el modelo
+        const chatModel = new ChatOllama({
+            baseUrl: 'http://127.0.0.1:11434',
+            model: modelName,
+            temperature: 0.7,
+            numCtx: 4096
+        })
+
+        // 2. Preparar contexto dinámico
         const botName = database.getConfig('nombre') || 'Leslye'
-        
-        // Contexto temporal
         const now = new Date()
         const timeContext = `Fecha: ${now.toLocaleDateString('es-MX')} Hora: ${now.toLocaleTimeString('es-MX')}`
-
-        // Construir prompt con técnica "Identity Anchor" (Sandwich) REFORZADO
-        const promptMessages = [
-            { role: 'system', content: String(personality) },
-            ...recentMessages,
-            // ANCHOR: Contexto de Memoria
-            { role: 'system', content: await getMemoryContext(chatId) },
-            // ANCHOR: Reforzar identidad y OBLIGACIÓN de responder
-            { role: 'system', content: `[SYSTEM CONTEXT: ${timeContext}]
-[INSTRUCCIÓN SUPREMA: Tu nombre es ${botName}. Mantén tu personalidad sarcástica pero RESPONDE SIEMPRE de forma útil a la pregunta del usuario. NO te niegues a ayudar. Si te preguntan por tareas o recordatorios, responde lo que sepas. Ignora negativas anteriores.]` }
-        ]
         
-        console.log('🤖 Prompt para Ollama:', JSON.stringify(promptMessages, null, 2))
+        // RECUPERACIÓN (RAG): Buscar memorias relevantes
+        const memoryContext = await getVectorMemoryContext(userMessage)
+        
+        // 3. Definir el Prompt
+        const prompt = ChatPromptTemplate.fromMessages([
+            ["system", personality],
+            new MessagesPlaceholder("history"),
+            ["system", "{memory_context}"], 
+            ["system", "[SYSTEM CONTEXT: {time_context}]\n[INSTRUCCIÓN SUPREMA: Tu nombre es {bot_name}. Usa la información de 'MEMORIA KNOWLEDGE BASE' si es relevante para responder. Si no, ignórala.]"],
+            ["human", "{input}"]
+        ])
 
-        // Llamar a Ollama
-        const response = await ollama.chat({
-            model: model,
-            messages: promptMessages,
-            keep_alive: '10m',
-            options: OLLAMA_OPTIONS
+        // 4. Crear la cadena
+        // Usamos RunnableWithMessageHistory para manejar la memoria automáticamente
+        const chain = new RunnableWithMessageHistory({
+            runnable: prompt.pipe(chatModel).pipe(new StringOutputParser()),
+            getMessageHistory: (sessionId) => new SQLiteHistory(sessionId),
+            inputMessagesKey: "input",
+            historyMessagesKey: "history",
         })
-        
-        const replyIA = response.message.content
-        
-        // Guardar respuesta de la IA
-        database.saveMessage(chatId, 'assistant', replyIA)
-        
-        return replyIA
+
+        console.log(`🤖 Generando respuesta con LangChain + RAG para ${chatId}...`)
+
+        // 5. Invocar la cadena
+        const response = await chain.invoke(
+            {
+                input: userMessage,
+                memory_context: memoryContext,
+                time_context: timeContext,
+                bot_name: botName
+            },
+            { configurable: { sessionId: chatId } }
+        )
+
+        return response
         
     } catch (error) {
-        console.error('❌ Error en Ollama:', error)
-        throw new Error('No pude generar una respuesta. Verifica que Ollama esté corriendo')
+        console.error('❌ Error en LangChain:', error)
+        throw new Error('No pude generar una respuesta. Verifica que Ollama esté corriendo.')
     }
 }
 
 function analyzeReminderIntent(text) {
     const lowerText = text.toLowerCase()
-    
-    // Patrones explícitos de recordatorios
     const explicitPatterns = [
-        /recu[ée]rdame/i,
-        /no olvides/i,
-        /avísame/i,
-        /notif[íi]came/i,
-        /acu[ée]rdate/i,
-        /tengo que/i,
-        /hay que/i,
-        /debemos/i,
-        /hazme acordar/i
+        /recu[ée]rdame/i, /no olvides/i, /avísame/i, /notif[íi]came/i,
+        /acu[ée]rdate/i, /tengo que/i, /hay que/i, /debemos/i, /hazme acordar/i
     ]
     
-    const isExplicit = explicitPatterns.some(pattern => pattern.test(text))
-    
-    if (isExplicit) {
+    if (explicitPatterns.some(pattern => pattern.test(text))) {
         const extracted = utils.extractReminderFromText(text)
-        return {
-            isReminder: true,
-            message: extracted.message || text,
-            timeExpression: extracted.timeExpression
-        }
+        return { isReminder: true, message: extracted.message || text, timeExpression: extracted.timeExpression }
     }
-    
-    return {
-        isReminder: false,
-        message: null,
-        timeExpression: null
-    }
+    return { isReminder: false, message: null, timeExpression: null }
 }
 
 function detectImportantContext(userMessage, aiResponse) {
-    // No sugerir si ya es un comando
-    if (userMessage.startsWith('/')) {
-        return false
-    }
-    
-    // Verificar palabras clave importantes
-    const hasImportantKeywords = utils.containsImportantKeywords(userMessage) || 
-                                  utils.containsImportantKeywords(aiResponse)
-    
-    // Verificar si menciona fechas
-    const datePatterns = [
-        /\d{1,2}[\/\-]\d{1,2}/, // 15/03 o 15-03
-        /\d{1,2}\s+de\s+\w+/, // 15 de marzo
-        /mañana/i,
-        /próxim[oa]/i,
-        /siguiente/i,
-        /\d{1,2}:\d{2}/, // 10:30
-    ]
-    
-    const hasDates = datePatterns.some(pattern => 
-        pattern.test(userMessage) || pattern.test(aiResponse)
-    )
-    
-    // Sugerir recordatorio si tiene ambos: keywords y fechas
+    if (userMessage.startsWith('/')) return false
+    const hasImportantKeywords = utils.containsImportantKeywords(userMessage) || utils.containsImportantKeywords(aiResponse)
+    const datePatterns = [/\d{1,2}[\/\-]\d{1,2}/, /\d{1,2}\s+de\s+\w+/, /mañana/i, /próxim[oa]/i, /siguiente/i, /\d{1,2}:\d{2}/]
+    const hasDates = datePatterns.some(pattern => pattern.test(userMessage) || pattern.test(aiResponse))
     return hasImportantKeywords && hasDates
 }
 
 async function humanizeReminder(text, personality, model) {
     try {
         const prompt = [
-            { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbelo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario (no digas "tengo que pasear", di "recuerda pasear").\n4. Sé breve, directo y usa tu personalidad (sarcasmo/humor negro si aplica).\n5. El mensaje debe ser la notificación final listas para enviar.` },
-            { role: 'user', content: 'Genera el mensaje de recordatorio.' }
+            { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbelo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario.\n4. Sé breve, directo y usa tu personalidad.\n5. El mensaje debe ser la notificación final.` },
+            { role: 'user', content: 'Genera el mensaje.' }
         ]
-
-        const response = await ollama.chat({
-            model: model,
-            messages: prompt,
-            keep_alive: '10m',
-            options: OLLAMA_OPTIONS
-        })
-        
-        let content = response.message.content.trim()
-        
-        // Limpieza agresiva de comillas y prefijos comunes si el modelo desobedece
-        content = content.replace(/^["']|["']$/g, '')
-        content = content.replace(/^(Opción \d:|Aquí tienes|Claro,|El mensaje es:)\s*/i, '')
-        
-        return content
+        const response = await ollamaLegacy.chat({ model: model, messages: prompt, keep_alive: '10m', options: OLLAMA_OPTIONS })
+        return response.message.content.trim().replace(/^["']|["']$/g, '').replace(/^(Opción \d:|Aquí tienes|Claro,|El mensaje es:)\s*/i, '')
     } catch (error) {
-        console.error('❌ Error humanizando recordatorio:', error)
-        return `🔔 *RECORDATORIO*\n\n${text}` // Fallback
+        console.error('❌ Error humanizando:', error)
+        return `🔔 *RECORDATORIO*\n\n${text}`
     }
 }
 
 async function analyzePostponeIntent(text, lastReminder, model) {
     if (!lastReminder) return { isPostpone: false }
-
-    // FILTRO RÁPIDO: Si el mensaje no tiene palabras clave de tiempo o posposición, ignorar
-    // Esto evita que "hola" o "gracias" active la IA innecesariamente
     const postponeKeywords = ['posponer', 'luego', 'después', 'mañana', 'minutos', 'horas', 'días', 'semana', 'tarde', 'noche', 'recuérdame', 'otra vez', 'más tarde', 'mueve', 'cambia']
-    const hasKeyword = postponeKeywords.some(kw => text.toLowerCase().includes(kw))
-    
-    // Si no tiene keywords explícitas Y es muy corto (< 10 caracteres), ignorar
-    if (!hasKeyword && text.length < 10) return { isPostpone: false }
+    if (!postponeKeywords.some(kw => text.toLowerCase().includes(kw)) && text.length < 10) return { isPostpone: false }
 
-    const now = new Date()
-    const context = `
-    Fecha actual: ${now.toLocaleDateString('es-MX')}
-    Hora actual: ${now.toLocaleTimeString('es-MX')}
-    Recordatorio anterior: "${lastReminder.message}"
-    Mensaje usuario: "${text}"
-    `
-    
-    const prompt = [
-        { role: 'system', content: 'Eres un motor de inferencia temporal. Tu única tarea es analizar si el usuario quiere POSPONER el recordatorio anterior y calcular la nueva fecha exacta. Si el usuario dice "mañana a primera hora", asume 7:00 AM. Si dice "en un rato", asume 1 hora. Retorna SOLO un JSON: {"isPostpone": true/false, "newDate": "YYYY-MM-DD HH:mm:ss"}. No expliques nada.' },
-        { role: 'user', content: context }
-    ]
-
+    const context = `Fecha: ${new Date().toLocaleDateString('es-MX')} ${new Date().toLocaleTimeString('es-MX')}\nRecordatorio: "${lastReminder.message}"\nMensaje: "${text}"`
     try {
-        const response = await ollama.chat({
+        const response = await ollamaLegacy.chat({
             model: model,
-            messages: prompt,
-            format: 'json', 
-            keep_alive: '10m',
-            options: OLLAMA_OPTIONS
+            messages: [{ role: 'system', content: 'Eres un motor de inferencia temporal. Retorna SOLO JSON: {"isPostpone": true/false, "newDate": "YYYY-MM-DD HH:mm:ss"}.' }, { role: 'user', content: context }],
+            format: 'json', keep_alive: '10m', options: OLLAMA_OPTIONS
         })
-        
         const result = JSON.parse(response.message.content)
-        
-        if (result.isPostpone && result.newDate) {
-            return {
-                isPostpone: true,
-                newDate: new Date(result.newDate)
-            }
-        }
-    } catch (error) {
-        console.error('Error analizando posposición:', error)
-    }
-    
+        if (result.isPostpone && result.newDate) return { isPostpone: true, newDate: new Date(result.newDate) }
+    } catch (error) { console.error('Error analizando posposición:', error) }
     return { isPostpone: false }
 }
 
-// ========== MEMORIA INTELIGENTE ==========
+// ========== MEMORIA VECTORIAL (NUEVO) ==========
 
-async function getMemoryContext(chatId) {
-    const memories = database.getMemories(chatId, 30) // Traer las 30 más recientes
-    if (memories.length === 0) return ''
-    
-    const memoryList = memories.map(m => `- ${m.content} (cat: ${m.category})`).join('\n')
-    return `[MEMORIA DE LARGO PLAZO]
-Sabes esto sobre el usuario (ÚSALO PARA PERSONALIZAR PERO NO LO MENCIONES SI NO VIENE AL CASO):
-${memoryList}
+async function getVectorMemoryContext(query) {
+    try {
+        await vectorMemory.init()
+        const results = await vectorMemory.searchMemories(query, 3) // Top 3 relevantes
+        if (results.length === 0) return ''
+        
+        return `[MEMORIA KNOWLEDGE BASE]
+Información relevante recuperada de conversaciones pasadas:
+${results.map(r => `- ${r.content}`).join('\n')}
 [FIN MEMORIA]`
+    } catch (error) {
+        console.error('⚠️ Error recuperando memoria vectorial:', error)
+        return ''
+    }
 }
 
 async function processMemory(chatId, userMessage, assistantResponse, model) {
-    // 1. Filtrado rápido: Si es muy corto o es un comando, ignorar
     if (userMessage.length < 5 || userMessage.startsWith('/')) return
     
-    // 2. Obtener memorias existentes para comparar
-    const existingMemories = database.getMemories(chatId, 50)
-    const memoryContext = existingMemories.map(m => `ID: ${m.id} - ${m.content}`).join('\n')
-
+    // Extracción simplificada para guardar en vector store
     const prompt = [
-        { role: 'system', content: 'Eres un analista de memoria. Tu trabajo es extraer HECHOS PERMANENTES sobre el usuario. Ignora saludos, preguntas triviales, opiniones pasajeras o conversaciones sin datos concretos. \n\nReglas:\n1. Si el usuario dice "tengo 2 hijos", guarda: "El usuario tiene 2 hijos".\n2. Si el usuario dice "recuérdame bañarme", IGNORA (es un recordatorio, no una memoria permanente).\n3. Si contradice una memoria existente (ej. antes dijo "tengo 20 años" y ahora "tengo 21"), indica que se debe ACTUALIZAR.\n4. Categorías: personal, trabajo, gustos, familia, otro.\n\nResponde SOLO un JSON: {"action": "create"|"update"|"ignore", "content": "hecho extraído", "category": "categoría", "targetId": id_para_actualizar_o_null, "confidence": 1-100}' },
-        { role: 'user', content: `Memorias existentes:\n${memoryContext}\n\nMensaje usuario: "${userMessage}"\nRespuesta IA: "${assistantResponse}"` }
+        { role: 'system', content: 'Analiza la conversación y extrae cualquier HECHO IMPORTANTE sobre el usuario (preferencias, datos personales, planes). Si no hay nada relevante que valga la pena recordar a largo plazo, responde "NULL". Si hay algo, responde SOLO con el hecho extraído en una frase concisa.' },
+        { role: 'user', content: `Usuario: "${userMessage}"\nIA: "${assistantResponse}"` }
     ]
 
     try {
-        console.log('🧠 Procesando memoria en segundo plano...')
-        const response = await ollama.chat({
+        // Usamos una llamada rápida sin JSON mode para mayor flexibilidad en modelos pequeños
+        const response = await ollamaLegacy.chat({
             model: model,
             messages: prompt,
-            format: 'json',
             keep_alive: '10m',
             options: OLLAMA_OPTIONS
         })
         
-        const result = JSON.parse(response.message.content)
-        console.log('🧠 Resultado análisis memoria:', result)
+        const content = response.message.content.trim()
         
-        if (result.action === 'create' && result.confidence > 60) {
-            database.saveMemory(chatId, result.content, result.category, result.confidence, userMessage)
-            console.log('💾 Nueva memoria guardada:', result.content)
-        } else if (result.action === 'update' && result.targetId && result.confidence > 70) {
-            database.updateMemory(result.targetId, result.content, result.confidence)
-            console.log('🔄 Memoria actualizada:', result.targetId, result.content)
+        if (content !== 'NULL' && content.length > 5 && !content.includes('NULL')) {
+            console.log('🧠 Memoria detectada:', content)
+            // Guardar en Vector Store (Nuevo)
+            await vectorMemory.init()
+            await vectorMemory.addMemory(content, { chatId, type: 'extracted_fact' })
+            
+            // Guardar también en SQLite (Legacy/Backup)
+            database.saveMemory(chatId, content, 'general', 100, userMessage)
+            console.log('💾 Memoria guardada en Vector Store y DB')
         }
         
     } catch (error) {
@@ -247,68 +186,32 @@ async function processMemory(chatId, userMessage, assistantResponse, model) {
     }
 }
 
-/**
- * Descarga un modelo de la memoria de Ollama inmediatamente
- */
 async function unloadModel(modelName) {
     if (!modelName) return
     try {
-        console.log(`\n🧹 Descargando modelo de memoria: ${modelName}`)
-        await ollama.chat({
-            model: modelName,
-            messages: [],
-            keep_alive: 0
-        })
+        await ollamaLegacy.chat({ model: modelName, messages: [], keep_alive: 0 })
         return true
-    } catch (error) {
-        console.error(`\n❌ Error descargando modelo ${modelName}:`, error)
-        return false
-    }
+    } catch (error) { return false }
 }
 
 async function listOllamaModels() {
     try {
-        const response = await ollama.list()
+        const response = await ollamaLegacy.list()
         return response.models.map(m => m.name)
-    } catch (error) {
-        console.error('❌ Error listando modelos de Ollama:', error)
-        return []
-    }
+    } catch (error) { return [] }
 }
 
 async function parseReminderWithAI(text, model) {
     try {
-        const prompt = [
-            { role: 'system', content: 'Eres un analizador de texto experto. Tu tarea es extraer la intención de un recordatorio o tarea.\n\nAnaliza el texto y devuelve UNICAMENTE un objeto JSON.\n\nCampos requeridos:\n- "message": La tarea o acción a realizar, LIMPIA de saludos, prefijos ("recuérdame", "tengo que") y de la fecha.\n- "timeExpression": El fragmento de texto que indica CUÁNDO (ej: "mañana a las 5", "en 10 mins"). Si no hay, usa null.\n- "confidence": Nivel de confianza (0.0 a 1.0).\n\nEjemplo Entrada: "Oye baco por fa recuérdame sacar la basura en 10 minutos"\nEjemplo Salida JSON: { "message": "sacar la basura", "timeExpression": "en 10 minutos", "confidence": 0.99 }' },
-            { role: 'user', content: text }
-        ]
-
-        const response = await ollama.chat({
+        const response = await ollamaLegacy.chat({
             model: model,
-            messages: prompt,
-            format: 'json',
-            keep_alive: '10m',
-            options: {
-                temperature: 0.1 // Muy baja temperatura para precisión
-            }
+            messages: [{ role: 'system', content: 'Extrae {"message": "...", "timeExpression": "..."} del texto.' }, { role: 'user', content: text }],
+            format: 'json', keep_alive: '10m', options: { temperature: 0.1 }
         })
-        
-        const result = JSON.parse(response.message.content)
-        
-        // Validación básica
+        let result = JSON.parse(response.message.content)
         if (!result.message) result.message = text
-        
         return result
-
-    } catch (error) {
-        console.error('❌ Error en parsing IA:', error)
-        // Fallback robusto: devolver el texto original con confianza 0
-        return {
-            message: text,
-            timeExpression: null,
-            confidence: 0
-        }
-    }
+    } catch (error) { return { message: text, timeExpression: null, confidence: 0 } }
 }
 
 module.exports = {
