@@ -180,28 +180,10 @@ client.on('message_create', async message => {
         }
     }
 
-    // 3. Verificar intención explícita de recordatorio
-    const reminderIntent = aiProcessor.analyzeReminderIntent(texto)
-    if (reminderIntent.isReminder) {
-        try {
-            const result = reminders.createReminder(
-                chatId, 
-                reminderIntent.message, 
-                reminderIntent.timeExpression
-            )
-            
-            if (result.type === 'scheduled') {
-                const utils = require('./src/utils')
-                return message.reply(`✅ Recordatorio creado\n\n📅 ${utils.formatDate(result.triggerDate)}\n🆔 ID: ${result.id}`)
-            } else {
-                return message.reply(`✅ Tarea creada\n\n🆔 ID: ${result.id}\n\n💡 Usa /fecha ${result.id} [fecha] para agregar fecha`)
-            }
-        } catch (error) {
-            return message.reply(`❌ ${error.message}`)
-        }
-    }
 
-    // 4. Integración con Ollama (Solo si no es comando ni recordatorio)
+    // 3. Integración con Agente LangChain (maneja recordatorios automáticamente)
+
+    // 4. Generar respuesta con Agente (incluye herramientas automáticas)
     try {
         // Obtener personalidad y modelo configurados
         const personality = database.getConfig('personalidad') || 'Eres un asistente útil y amigable.'
