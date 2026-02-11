@@ -49,11 +49,17 @@ class VectorMemory {
 
     async searchMemories(query, k = 3) {
         if (!this.vectorStore) await this.init()
-        const results = await this.vectorStore.similaritySearch(query, k)
-        return results.map(doc => ({
-            content: doc.pageContent,
-            metadata: doc.metadata
-        }))
+        try {
+            const results = await this.vectorStore.similaritySearch(query, k)
+            return results.map(doc => ({
+                content: doc.pageContent,
+                metadata: doc.metadata
+            }))
+        } catch (error) {
+            // Manejar caso cuando el vector store está vacío
+            console.warn('⚠️ Vector store vacío o k mayor que número de elementos')
+            return []
+        }
     }
 }
 

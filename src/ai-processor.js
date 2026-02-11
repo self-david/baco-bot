@@ -2,15 +2,15 @@ const { ChatOllama } = require('@langchain/ollama')
 const { ChatPromptTemplate, MessagesPlaceholder } = require('@langchain/core/prompts')
 const { RunnableWithMessageHistory } = require('@langchain/core/runnables')
 const { StringOutputParser } = require('@langchain/core/output_parsers')
-const { HumanMessage, SystemMessage } = require('@langchain/core/messages')
 const { SQLiteHistory } = require('./langchain-adapter')
-const vectorMemory = require('./vector-store') // Nueva memoria vectorial
+const vectorMemory = require('./vector-store')
+const { TOOLS_DESCRIPTION, executeToolCall } = require('./tools')
 
-const { Ollama } = require('ollama') // Mantener para funciones legacy por ahora
+const { Ollama } = require('ollama') //  Mantener para funciones legacy
 const database = require('./database')
 const utils = require('./utils')
 
-// Cliente legacy para funciones auxiliares (se puede migrar después)
+// Cliente legacy para funciones auxiliares
 const ollamaLegacy = new Ollama({ host: 'http://127.0.0.1:11434' })
 
 const OLLAMA_OPTIONS = {
@@ -19,7 +19,7 @@ const OLLAMA_OPTIONS = {
 }
 
 /**
- * Genera una respuesta usando LangChain con manejo de historial y RAG.
+ * Genera una respuesta usando un AGENTE con herramientas (prompt-based).
  */
 async function generateResponse(chatId, userMessage, personality, modelName) {
     try {
@@ -34,22 +34,33 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
         // 2. Preparar contexto dinámico
         const botName = database.getConfig('nombre') || 'Leslye'
         const now = new Date()
-        const timeContext = `Fecha: ${now.toLocaleDateString('es-MX')} Hora: ${now.toLocaleTimeString('es-MX')}`
+        const timeContext = `Fecha y hora actual: ${now.toLocaleString('es-MX', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        })}`
         
         // RECUPERACIÓN (RAG): Buscar memorias relevantes
         const memoryContext = await getVectorMemoryContext(userMessage)
         
-        // 3. Definir el Prompt
+        // 3. Definir el Prompt con descripción de herramientas
         const prompt = ChatPromptTemplate.fromMessages([
-            ["system", personality],
+            ["system", `${personality}
+
+Tu nombre es ${botName}.
+${timeContext}
+
+${memoryContext}
+
+${TOOLS_DESCRIPTION}`],
             new MessagesPlaceholder("history"),
-            ["system", "{memory_context}"], 
-            ["system", "[SYSTEM CONTEXT: {time_context}]\n[INSTRUCCIÓN SUPREMA: Tu nombre es {bot_name}. Usa la información de 'MEMORIA KNOWLEDGE BASE' si es relevante para responder. Si no, ignórala.]"],
             ["human", "{input}"]
         ])
 
-        // 4. Crear la cadena
-        // Usamos RunnableWithMessageHistory para manejar la memoria automáticamente
+        // 4. Crear la cadena con historial
         const chain = new RunnableWithMessageHistory({
             runnable: prompt.pipe(chatModel).pipe(new StringOutputParser()),
             getMessageHistory: (sessionId) => new SQLiteHistory(sessionId),
@@ -57,18 +68,39 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
             historyMessagesKey: "history",
         })
 
-        console.log(`🤖 Generando respuesta con LangChain + RAG para ${chatId}...`)
+        console.log(`🤖 Generando respuesta con agente (prompt-based) para ${chatId}...`)
 
         // 5. Invocar la cadena
         const response = await chain.invoke(
-            {
-                input: userMessage,
-                memory_context: memoryContext,
-                time_context: timeContext,
-                bot_name: botName
-            },
+            { input: userMessage },
             { configurable: { sessionId: chatId } }
         )
+
+        // 6. Detectar si la respuesta es una llamada a herramienta
+        const toolCallMatch = response.match(/\{["']function["']:\s*["'](\w+)["'],\s*["']params["']:\s*\{[^}]+\}\}/)
+        
+        if (toolCallMatch) {
+            try {
+                // Extraer el JSON limpio
+                const jsonStart = response.indexOf('{')
+                const jsonEnd = response.lastIndexOf('}') + 1
+                const toolCallJson = response.substring(jsonStart, jsonEnd)
+                
+                const toolCall = JSON.parse(toolCallJson)
+                console.log('🔧 Ejecutando herramienta:', toolCall.function)
+                
+                // Ejecutar la herramienta
+                const toolResult = await executeToolCall(toolCall, chatId)
+                
+                // Opcionalmente, podemos darle el resultado al LLM para que lo formatee mejor
+                // Por ahora, devolvemos el resultado directamente
+                return toolResult
+                
+            } catch (error) {
+                console.error('Error ejecutando herramienta:', error)
+                return response // Si falla el parsing, devolver respuesta original
+            }
+        }
 
         return response
         
@@ -76,20 +108,6 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
         console.error('❌ Error en LangChain:', error)
         throw new Error('No pude generar una respuesta. Verifica que Ollama esté corriendo.')
     }
-}
-
-function analyzeReminderIntent(text) {
-    const lowerText = text.toLowerCase()
-    const explicitPatterns = [
-        /recu[ée]rdame/i, /no olvides/i, /avísame/i, /notif[íi]came/i,
-        /acu[ée]rdate/i, /tengo que/i, /hay que/i, /debemos/i, /hazme acordar/i
-    ]
-    
-    if (explicitPatterns.some(pattern => pattern.test(text))) {
-        const extracted = utils.extractReminderFromText(text)
-        return { isReminder: true, message: extracted.message || text, timeExpression: extracted.timeExpression }
-    }
-    return { isReminder: false, message: null, timeExpression: null }
 }
 
 function detectImportantContext(userMessage, aiResponse) {
@@ -103,7 +121,7 @@ function detectImportantContext(userMessage, aiResponse) {
 async function humanizeReminder(text, personality, model) {
     try {
         const prompt = [
-            { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbelo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario.\n4. Sé breve, directo y usa tu personalidad.\n5. El mensaje debe ser la notificación final.` },
+            { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbe lo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario.\n4. Sé breve, directo y usa tu personalidad.\n5. El mensaje debe ser la notificación final.` },
             { role: 'user', content: 'Genera el mensaje.' }
         ]
         const response = await ollamaLegacy.chat({ model: model, messages: prompt, keep_alive: '10m', options: OLLAMA_OPTIONS })
@@ -132,12 +150,12 @@ async function analyzePostponeIntent(text, lastReminder, model) {
     return { isPostpone: false }
 }
 
-// ========== MEMORIA VECTORIAL (NUEVO) ==========
+// ========== MEMORIA VECTORIAL ==========
 
 async function getVectorMemoryContext(query) {
     try {
         await vectorMemory.init()
-        const results = await vectorMemory.searchMemories(query, 3) // Top 3 relevantes
+        const results = await vectorMemory.searchMemories(query, 3)
         if (results.length === 0) return ''
         
         return `[MEMORIA KNOWLEDGE BASE]
@@ -153,14 +171,12 @@ ${results.map(r => `- ${r.content}`).join('\n')}
 async function processMemory(chatId, userMessage, assistantResponse, model) {
     if (userMessage.length < 5 || userMessage.startsWith('/')) return
     
-    // Extracción simplificada para guardar en vector store
     const prompt = [
         { role: 'system', content: 'Analiza la conversación y extrae cualquier HECHO IMPORTANTE sobre el usuario (preferencias, datos personales, planes). Si no hay nada relevante que valga la pena recordar a largo plazo, responde "NULL". Si hay algo, responde SOLO con el hecho extraído en una frase concisa.' },
         { role: 'user', content: `Usuario: "${userMessage}"\nIA: "${assistantResponse}"` }
     ]
 
     try {
-        // Usamos una llamada rápida sin JSON mode para mayor flexibilidad en modelos pequeños
         const response = await ollamaLegacy.chat({
             model: model,
             messages: prompt,
@@ -172,11 +188,8 @@ async function processMemory(chatId, userMessage, assistantResponse, model) {
         
         if (content !== 'NULL' && content.length > 5 && !content.includes('NULL')) {
             console.log('🧠 Memoria detectada:', content)
-            // Guardar en Vector Store (Nuevo)
             await vectorMemory.init()
             await vectorMemory.addMemory(content, { chatId, type: 'extracted_fact' })
-            
-            // Guardar también en SQLite (Legacy/Backup)
             database.saveMemory(chatId, content, 'general', 100, userMessage)
             console.log('💾 Memoria guardada en Vector Store y DB')
         }
@@ -201,27 +214,12 @@ async function listOllamaModels() {
     } catch (error) { return [] }
 }
 
-async function parseReminderWithAI(text, model) {
-    try {
-        const response = await ollamaLegacy.chat({
-            model: model,
-            messages: [{ role: 'system', content: 'Extrae {"message": "...", "timeExpression": "..."} del texto.' }, { role: 'user', content: text }],
-            format: 'json', keep_alive: '10m', options: { temperature: 0.1 }
-        })
-        let result = JSON.parse(response.message.content)
-        if (!result.message) result.message = text
-        return result
-    } catch (error) { return { message: text, timeExpression: null, confidence: 0 } }
-}
-
 module.exports = {
     generateResponse,
-    analyzeReminderIntent,
     detectImportantContext,
     humanizeReminder,
     analyzePostponeIntent,
     processMemory,
     listOllamaModels,
-    unloadModel,
-    parseReminderWithAI
+    unloadModel
 }
