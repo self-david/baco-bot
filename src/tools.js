@@ -1,18 +1,35 @@
 // const reminders = require('./reminders') // Lazy loading para evitar ciclos
 const calendar = require('./calendar-service')
 
-// ...
+/**
+ * Herramientas disponibles para el bot (enfoque simple sin LangChain Tools)
+ */
 
 async function createReminder(chatId, mensaje, tiempo) {
     try {
         const reminders = require('./reminders')
         const resultado = reminders.createReminder(chatId, mensaje, tiempo || null)
-// ...
+        
+        if (resultado.type === 'scheduled') {
+            return `✅ Recordatorio programado para ${resultado.triggerDate.toLocaleString('es-MX')}: "${mensaje}"`
+        } else {
+            return `✅ Tarea agregada a tu lista: "${mensaje}"`
+        }
+    } catch (error) {
+        return `❌ Error: ${error.message}`
+    }
+}
+
 async function listReminders(chatId) {
     try {
         const reminders = require('./reminders')
         const lista = reminders.listReminders(chatId, false)
-// ...
+        return lista || 'No tienes recordatorios pendientes.'
+    } catch (error) {
+        return `Error: ${error.message}`
+    }
+}
+
 async function deleteReminder(id) {
     try {
         const reminders = require('./reminders')
