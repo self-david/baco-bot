@@ -56,7 +56,7 @@ async function processReminderSafe(reminder) {
     }
 }
 
-const aiProcessor = require('./ai-processor') // Importar AI Processor
+// const aiProcessor = require('./ai-processor') // MOVIDO a sendReminder para evitar ciclo
 
 // ...
 
@@ -76,6 +76,7 @@ async function sendReminder(reminder) {
         const model = database.getConfig('modelo')
         
         if (model) {
+            const aiProcessor = require('./ai-processor')
             const humanized = await aiProcessor.humanizeReminder(reminder.message, personality, model)
             messageToSend = `🔔 *RECORDATORIO*\n\n${humanized}`
         }
