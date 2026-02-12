@@ -83,6 +83,17 @@ app.get('/memory/:chatId', (req, res) => {
     }
 })
 
+// 4.1 Get Explicit Memories (Facts)
+app.get('/memories/:chatId', (req, res) => {
+    const { chatId } = req.params
+    try {
+        const memories = database.getMemories(chatId, 100)
+        res.json({ memories })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
 // 5. Clear Memory
 app.delete('/memory/:chatId', (req, res) => {
     const { chatId } = req.params
@@ -94,7 +105,27 @@ app.delete('/memory/:chatId', (req, res) => {
     }
 })
 
-// 6. Chat with Agent (AI)
+// 6. Get Stats
+app.get('/stats', (req, res) => {
+    try {
+        const stats = database.getStats()
+        res.json(stats)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 7. Get All Conversations
+app.get('/conversations', (req, res) => {
+    try {
+        const conversations = database.getConversations()
+        res.json({ conversations })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 8. Chat with Agent (AI)
 app.post('/chat', async (req, res) => {
     const { chatId, message } = req.body
     
@@ -138,6 +169,13 @@ app.post('/chat', async (req, res) => {
         
         // Guardar explícitamente la respuesta
         database.saveMessage(chatId, 'assistant', response)
+
+        // 3. Procesar MEMORIA en segundo plano (Fire & Forget)
+        setTimeout(() => {
+            aiProcessor.processMemory(chatId, message, response, model).catch(err => {
+                console.error('Background memory processing error:', err)
+            })
+        }, 0)
         
         res.json({ 
             chatId,

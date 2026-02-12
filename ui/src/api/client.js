@@ -48,6 +48,21 @@ export const api = {
   clearMemory: async (chatId) => {
     const response = await apiClient.delete(`/memory/${chatId}`)
     return response.data
+  },
+
+  getConversations: async () => {
+    const response = await apiClient.get('/conversations')
+    return response.data
+  },
+
+  getStats: async () => {
+    const response = await apiClient.get('/stats')
+    return response.data
+  },
+
+  getMemories: async (chatId) => {
+    const response = await apiClient.get(`/memories/${chatId}`)
+    return response.data
   }
 }
 

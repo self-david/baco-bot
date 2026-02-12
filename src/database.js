@@ -455,6 +455,16 @@ function getStats() {
     }
 }
 
+function getConversations() {
+    const stmt = db.prepare(`
+        SELECT chat_id, MAX(timestamp) as last_message, COUNT(*) as messages_count 
+        FROM conversations 
+        GROUP BY chat_id 
+        ORDER BY last_message DESC
+    `)
+    return stmt.all()
+}
+
 // ========== GOOGLE CALENDAR ==========
 
 function saveGoogleCredentials(chatId, tokens) {
@@ -500,6 +510,7 @@ module.exports = {
     getRecentMessages,
     getConversationHistory: getRecentMessages, // Alias para compatibilidad
     clearConversationHistory,
+    getConversations,
     createReminder,
     getPendingReminders,
     getAllReminders,

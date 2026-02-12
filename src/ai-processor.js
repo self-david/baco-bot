@@ -28,7 +28,9 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
             baseUrl: 'http://127.0.0.1:11434',
             model: modelName,
             temperature: 0.7,
-            numCtx: 4096
+            numCtx: 4096,
+            repeatPenalty: 1.1, // Evitar bucles
+            stop: ["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>", "Human:", "User:"] // Stop tokens comunes
         })
 
         // 2. Preparar contexto dinámico
@@ -52,6 +54,11 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
 
 Tu nombre es ${botName}.
 ${timeContext}
+
+INSTRUCCIONES CLAVE:
+1. Responde de forma CONCISA y DIRECTA. Evita parrafadas innecesarias.
+2. NO repitas tu respuesta.
+3. Si ya respondiste, detente.
 
 ${memoryContext}
 
