@@ -41,7 +41,7 @@ app.get('/config', (req, res) => {
         const config = {
             modelo: database.getConfig('modelo') || 'No configurado',
             personalidad: database.getConfig('personalidad') || 'Eres un asistente útil.',
-            whitelist: database.getWhitelist() || []
+            whitelist: database.getAllWhitelist() || []
         }
         res.json(config)
     } catch (error) {
