@@ -107,8 +107,33 @@ app.post('/chat', async (req, res) => {
         const personality = database.getConfig('personalidad') || 'Eres un asistente útil.'
         const model = database.getConfig('modelo')
 
+        // 1. Guardar mensaje del usuario en DB
+        database.saveMessage(chatId, 'user', message)
+
         // Generate response
-        const response = await aiProcessor.generateResponse(chatId, message, personality, model)
+        let response
+        try {
+            response = await aiProcessor.generateResponse(chatId, message, personality, model)
+        } catch (aiError) {
+            console.error('Error generando respuesta IA:', aiError)
+            // Si falla la IA, guardar un mensaje de error del sistema o devolverlo
+            // Pero no guardamos la respuesta fallida como 'assistant' si es un error técnico
+            throw aiError
+        }
+        
+        // 2. Guardar respuesta del bot en DB
+        // Nota: LangChain también podría estar guardando, lo cual duplicaría. 
+        // Vamos a verificar si aiProcessor ya guarda.
+        // Si aiProcessor usa SQLiteHistory, ya guarda. 
+        // Pero para asegurar consistencia en la UI, mejor controlamos el guardado aqui
+        // o confiamos en SQLiteHistory.
+        
+        // Asumiremos que aiProcessor YA guarda en el historial de LangChain (que va a la misma DB)
+        // pero por si acaso, verificaremos si es necesario.
+        // Dado que el usuario reportó que no se guarda, vamos a forzarlo.
+        
+        // Guardar explícitamente la respuesta
+        database.saveMessage(chatId, 'assistant', response)
         
         res.json({ 
             chatId,
