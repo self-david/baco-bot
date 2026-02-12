@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Baco Bot - Interfaz de Pruebas</title>
+    <script>
+      // Limpiar Service Workers de proyectos anteriores en este puerto
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+            console.log('Service Worker desregistrado');
+          }
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
