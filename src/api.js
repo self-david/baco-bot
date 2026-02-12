@@ -72,7 +72,7 @@ app.get('/memory/:chatId', (req, res) => {
     const { chatId } = req.params
     try {
         // Limit to last 50 messages for UI
-        const history = database.getHistory(chatId, 50)
+        const history = database.getConversationHistory(chatId, 50)
         res.json({ history })
     } catch (error) {
         res.status(500).json({ error: error.message })
@@ -83,7 +83,7 @@ app.get('/memory/:chatId', (req, res) => {
 app.delete('/memory/:chatId', (req, res) => {
     const { chatId } = req.params
     try {
-        database.clearHistory(chatId)
+        database.clearConversationHistory(chatId)
         res.json({ success: true, message: 'Historial borrado' })
     } catch (error) {
         res.status(500).json({ error: error.message })
