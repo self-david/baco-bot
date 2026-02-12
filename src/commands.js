@@ -20,7 +20,7 @@ async function processCommand(message, chatId, client) {
         const validCommands = [
             'nombre', 'personalidad', 'refinar', 'modelo',
             'whitelist', 'lista', 'w', 'l',
-            'recordar', 
+            'recordar', 'posponer',
             'tarea', 'tareas', 't',
             'recordatorios', // 'tareas', 't' ya están arriba
             'completar',
@@ -80,6 +80,9 @@ async function processCommand(message, chatId, client) {
                 
             case 'recordar':
                 return await handleRecordar(args, chatId)
+                
+            case 'posponer':
+                return await handlePosponer(args, chatId)
                 
             case 'tarea':
             case 't':
@@ -599,13 +602,15 @@ function showHelp(chatId) {
 /recordatorios - Ver todos pendientes
 /fecha [ID] [fecha] - Agregar fecha a tarea
 /completar [ID] - Marcar como hecho
+/posponer [tiempo] - Posponer el último recordatorio
 /cancelar [ID] - Cancelar recordatorio
 
 *Ejemplos:*
 /recordar Comprar leche en 30 minutos
 /recordar Reunión el 15 de marzo a las 10am
 /tarea Revisar documentos
-/fecha 3 mañana a las 9am`
+/fecha 3 mañana a las 9am
+/posponer en 2 horas`
 
     if (isAdmin) {
         help += `
@@ -660,6 +665,40 @@ function handleOlvidar(args, chatId) {
         return `🗑️ Memoria ${id} eliminada para siempre.`
     } else {
         return `❌ No se encontró la memoria con ID ${id}.`
+    }
+}
+
+async function handlePosponer(args, chatId) {
+    const lastReminder = database.getLastCompletedReminder(chatId)
+    if (!lastReminder) {
+        return '❌ No hay ningún recordatorio reciente para posponer.'
+    }
+
+    const model = database.getConfig('modelo')
+    if (!model) return '❌ Error: No hay modelo configurado'
+
+    const texto = args.join(' ')
+    if (!texto) {
+        return '❌ Dime cuánto tiempo lo pospongo (ej: /posponer 10 min)'
+    }
+
+    const result = await aiProcessor.analyzePostponeIntent(texto, lastReminder, model)
+    
+    if (result.isPostpone && result.newDate) {
+        try {
+            const newReminder = reminders.createReminder(
+                chatId, 
+                lastReminder.message, 
+                result.newDate.toISOString()
+            )
+            
+            return `✅ *Recordatorio pospuesto*\n\nOriginal: "${lastReminder.message}"\nNueva fecha: ${utils.formatDate(newReminder.triggerDate)}\n🆔 ID: ${newReminder.id}`
+        } catch (error) {
+            console.error('❌ Error al posponer:', error)
+            return '❌ Error al crear el nuevo recordatorio pospuesto.'
+        }
+    } else {
+        return '❌ No pude entender cuánto tiempo quieres posponerlo. Intenta algo como "10 min" o "mañana".'
     }
 }
 

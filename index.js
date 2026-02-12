@@ -157,28 +157,6 @@ client.on('message_create', async message => {
         return
     }
 
-    // 2.5 Verificar si es una petición para posponer el último recordatorio (IA)
-    const lastReminder = database.getLastCompletedReminder(chatId)
-    if (lastReminder && !texto.startsWith('/')) {
-        const model = database.getConfig('modelo')
-        if (!model) return console.error('❌ Error: No hay modelo configurado')
-        const postponeIntent = await aiProcessor.analyzePostponeIntent(texto, lastReminder, model)
-        if (postponeIntent.isPostpone) {
-            try {
-                // Notificar que se está procesando (opcional)
-                const result = reminders.createReminder(
-                    chatId, 
-                    lastReminder.message, 
-                    postponeIntent.newDate.toISOString()
-                )
-                
-                const utils = require('./src/utils')
-                return message.reply(`✅ *Recordatorio pospuesto*\n\nOriginal: "${lastReminder.message}"\nNueva fecha: ${utils.formatDate(result.triggerDate)}\n🆔 ID: ${result.id}`)
-            } catch (error) {
-                console.error('❌ Error al posponer:', error)
-            }
-        }
-    }
 
 
     // 3. Integración con Agente LangChain (maneja recordatorios automáticamente)

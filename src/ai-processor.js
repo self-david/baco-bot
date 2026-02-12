@@ -134,8 +134,8 @@ async function humanizeReminder(text, personality, model) {
 
 async function analyzePostponeIntent(text, lastReminder, model) {
     if (!lastReminder) return { isPostpone: false }
-    const postponeKeywords = ['posponer', 'luego', 'después', 'mañana', 'minutos', 'horas', 'días', 'semana', 'tarde', 'noche', 'recuérdame', 'otra vez', 'más tarde', 'mueve', 'cambia']
-    if (!postponeKeywords.some(kw => text.toLowerCase().includes(kw)) && text.length < 10) return { isPostpone: false }
+    const postponeKeywords = ['posponer', 'luego', 'después', 'mañana', 'minutos', 'horas', 'días', 'semana', 'tarde', 'noche', 'recuérdame', 'otra vez', 'más tarde', 'mueve', 'cambia', 'a las', 'para las', 'en', 'el']
+    if (!postponeKeywords.some(kw => text.toLowerCase().includes(kw)) && text.length < 3) return { isPostpone: false }
 
     const context = `Fecha: ${new Date().toLocaleDateString('es-MX')} ${new Date().toLocaleTimeString('es-MX')}\nRecordatorio: "${lastReminder.message}"\nMensaje: "${text}"`
     try {
