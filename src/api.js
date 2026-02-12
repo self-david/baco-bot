@@ -1,6 +1,7 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
+const cors = require('cors')
 const { processCommand } = require('./commands')
 const aiProcessor = require('./ai-processor')
 const database = require('./database')
@@ -9,6 +10,7 @@ const app = express()
 const port = process.env.PORT || 3000
 
 // Middleware
+app.use(cors()) // Permitir peticiones desde el frontend
 app.use(bodyParser.json())
 app.use(morgan('dev'))
 
@@ -33,7 +35,62 @@ const createMockMessage = (chatId, body) => ({
 
 // --- Endpoints ---
 
-// 1. Chat with Agent (AI)
+// 1. Get Configuration
+app.get('/config', (req, res) => {
+    try {
+        const config = {
+            modelo: database.getConfig('modelo') || 'No configurado',
+            personalidad: database.getConfig('personalidad') || 'Eres un asistente útil.',
+            whitelist: database.getWhitelist() || []
+        }
+        res.json(config)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 2. Update Configuration
+app.post('/config', (req, res) => {
+    const { modelo, personalidad } = req.body
+    try {
+        if (modelo) database.setConfig('modelo', modelo)
+        if (personalidad) database.setConfig('personalidad', personalidad)
+        res.json({ success: true, message: 'Configuración actualizada' })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 3. Get Models (Mock wrapper for Ollama)
+// En el futuro esto podría llamar a 'ollama list' real
+app.get('/models', async (req, res) => {
+    res.json({ models: ['gemma3:1b', 'llama3', 'mistral', 'qwen2:0.5b'] })
+})
+
+// 4. Get Memory/History
+app.get('/memory/:chatId', (req, res) => {
+    const { chatId } = req.params
+    try {
+        // Limit to last 50 messages for UI
+        const history = database.getHistory(chatId, 50)
+        res.json({ history })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 5. Clear Memory
+app.delete('/memory/:chatId', (req, res) => {
+    const { chatId } = req.params
+    try {
+        database.clearHistory(chatId)
+        res.json({ success: true, message: 'Historial borrado' })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// 6. Chat with Agent (AI)
 app.post('/chat', async (req, res) => {
     const { chatId, message } = req.body
     
@@ -65,7 +122,7 @@ app.post('/chat', async (req, res) => {
     }
 })
 
-// 2. Execute Command
+// 7. Execute Command
 app.post('/command', async (req, res) => {
     const { chatId, command } = req.body
 
@@ -98,7 +155,5 @@ app.post('/command', async (req, res) => {
 // Start server
 app.listen(port, () => {
     console.log(`🚀 Test API running on http://localhost:${port}`)
-    console.log(`Endpoints:`)
-    console.log(`- POST /chat    { "chatId": "test-user", "message": "hello" }`)
-    console.log(`- POST /command { "chatId": "test-user", "command": "/help" }`)
+    console.log(`Endpoints available for UI`)
 })
