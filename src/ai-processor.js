@@ -77,7 +77,8 @@ ${TOOLS_DESCRIPTION}`],
         )
 
         // 6. Detectar si la respuesta es una llamada a herramienta
-        const toolCallMatch = response.match(/\{["']function["']:\s*["'](\w+)["'],\s*["']params["']:\s*\{[^}]+\}\}/)
+        // Regex ajustada para permitir params vacíos: params": {}
+        const toolCallMatch = response.match(/\{["']function["']:\s*["'](\w+)["'],\s*["']params["']:\s*\{[^}]*\}\}/)
         
         if (toolCallMatch) {
             try {
