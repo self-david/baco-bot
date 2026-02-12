@@ -10,6 +10,14 @@ Este es un bot avanzado de WhatsApp que utiliza Inteligencia Artificial (Ollama)
 - **Memoria Vectorial (RAG):** Búsqueda semántica de recuerdos relevantes para contexto inteligente.
 - **Historial Persistente:** Guarda automáticamente conversaciones en SQLite para continuidad entre sesiones.
 - **Personalidad Configurable:** Define quién es, cómo habla y su nombre.
+  13:
+  14: ### 🖥️ Panel de Control Web (UI de Pruebas)
+  15:
+  16: Nueva interfaz visual para gestionar el bot sin usar comandos de WhatsApp:
+  17: - **Chat en Tiempo Real:** Prueba el bot directamente desde el navegador.
+  18: - **Configuración Visual:** Cambia el modelo de IA y la personalidad con un par de clics.
+  19: - **Gestión de Memoria:** Visualiza y limpia el historial de conversaciones.
+  20: - **Sincronización:** Detecta automáticamente tus modelos locales de Ollama.
 
 ### 📅 Sistema de Recordatorios Inteligentes
 
@@ -193,6 +201,8 @@ GOOGLE_CLIENT_SECRET=tu_secreto_de_google
 - `src/daily-summary.js`: Servicio de resúmenes diarios programados.
 - `src/commands.js`: Procesador de comandos explícitos (`/`).
 - `scripts/`: Herramientas de utilidad (init, migrate, whitelist-cli).
+  196: - `ui/`: Aplicación React para el panel de control.
+  197: - `src/api.js`: API REST que comunica la UI con el core del bot.
 
 ## 🐛 Solución de Problemas Comunes
 

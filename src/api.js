@@ -61,10 +61,14 @@ app.post('/config', (req, res) => {
     }
 })
 
-// 3. Get Models (Mock wrapper for Ollama)
-// En el futuro esto podría llamar a 'ollama list' real
+// 3. Get Models (Real list from Ollama)
 app.get('/models', async (req, res) => {
-    res.json({ models: ['gemma3:1b', 'llama3', 'mistral', 'qwen2:0.5b'] })
+    try {
+        const models = await aiProcessor.listOllamaModels()
+        res.json({ models })
+    } catch (error) {
+        res.status(500).json({ error: 'No se pudo conectar con Ollama para obtener modelos' })
+    }
 })
 
 // 4. Get Memory/History
