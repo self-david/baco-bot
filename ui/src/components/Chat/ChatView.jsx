@@ -144,8 +144,7 @@ export default function ChatView() {
       </div>
 
       {/* Messages */}
-      <MessageList messages={messages} loading={loading} />
-      <div ref={messagesEndRef} />
+      <MessageList messages={messages} loading={loading} messagesEndRef={messagesEndRef} />
 
       {/* Input */}
       <MessageInput onSend={handleSendMessage} disabled={loading} />
