@@ -97,6 +97,16 @@ Usa `pm2` para mantener el bot activo incluso si cierras la terminal.
 - `baco-bot stop`: Detener el bot
 - `baco-bot restart`: Reiniciar el bot (útil tras cambios)
 
+#### 💻 Panel de Control (UI)
+
+Para abrir la interfaz de configuración y chat:
+
+```bash
+npm run ui
+```
+
+Luego abre [http://localhost:5174](http://localhost:5174) en tu navegador.
+
 ### 4. Gestión de Usuarios (Whitelist)
 
 Por defecto, nadie puede usar el bot hasta que sea autorizado. Usa estos comandos en la terminal:
