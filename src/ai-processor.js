@@ -10,10 +10,78 @@ const { Ollama } = require('ollama') //  Mantener para funciones legacy
 const database = require('./database')
 const utils = require('./utils')
 
+// Interceptor de Fetch para arreglar el formato SSE (Server-Sent Events) de APIs remotas
+// y convertirlo al formato NDJSON que espera Ollama/LangChain.
+const customFetch = async (url, options) => {
+    const response = await fetch(url, options);
+    if (!response.body) return response;
+
+    let requestBody = {};
+    if (options.body && typeof options.body === 'string') {
+        try { requestBody = JSON.parse(options.body); } catch(e){}
+    }
+    const isStreamRequested = requestBody.stream === true;
+    
+    // Si es nuestra API remota
+    if (url.toString().includes('davidga.dev') || url.toString().includes('api.miweb.com')) {
+        // Fix para comando /modelo (listar tags)
+        if (url.toString().endsWith('/api/tags')) {
+            return new Response(JSON.stringify({ models: [{ name: 'remoto_por_defecto' }, { name: 'llama-3.1-70b-versatile' }, { name: 'gemma3:1b' }, { name: 'mixtral-8x7b-32768' }] }), { headers: { 'Content-Type': 'application/json' }});
+        }
+
+        if (isStreamRequested) {
+            // Limpiar "data: " chunk por chunk para streaming nativo
+            const transformStream = new TransformStream({
+                transform(chunk, controller) {
+                    let chunkText = new TextDecoder().decode(chunk);
+                    const lines = chunkText.split('\n');
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        let cleanLine = line.replace(/^data:\s*/, '');
+                        controller.enqueue(new TextEncoder().encode(cleanLine + '\n'));
+                    }
+                }
+            });
+            return new Response(response.body.pipeThrough(transformStream), {
+                headers: response.headers,
+                status: response.status,
+                statusText: response.statusText
+            });
+        } else {
+            // El cliente esperaba object JSON (no stream), así que consolidamos el stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let finalContent = '';
+            let model = requestBody.model || 'unknown';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                let chunkText = decoder.decode(value);
+                const lines = chunkText.split('\n');
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    let cleanLine = line.replace(/^data:\s*/, '');
+                    try {
+                        const obj = JSON.parse(cleanLine);
+                        if (obj.model) model = obj.model;
+                        if (obj.message && obj.message.content) finalContent += obj.message.content;
+                    } catch (e) {}
+                }
+            }
+
+            const finalObj = { model, message: { role: 'assistant', content: finalContent }, done: true };
+            return new Response(JSON.stringify(finalObj), { headers: { 'Content-Type': 'application/json' }});
+        }
+    }
+    return response;
+};
+
 // Función para obtener cliente legacy dinámico
 function getOllamaInstance() {
     const customUrl = database.getConfig('api_url')
-    return new Ollama({ host: customUrl || 'http://127.0.0.1:11434' })
+    return new Ollama({ host: customUrl || 'http://127.0.0.1:11434', fetch: customFetch })
 }
 
 const OLLAMA_OPTIONS = {
@@ -34,7 +102,8 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
             temperature: 0.7,
             numCtx: 4096,
             repeatPenalty: 1.1, // Evitar bucles
-            stop: ["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>", "Human:", "User:"] // Stop tokens comunes
+            stop: ["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>", "Human:", "User:"], // Stop tokens comunes
+            fetch: customFetch
         })
 
         // 2. Preparar contexto dinámico
