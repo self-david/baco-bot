@@ -92,11 +92,11 @@ Tienes acceso a las siguientes funciones. Para usarlas, responde EXACTAMENTE en 
 {{"function": "nombre_funcion", "params": {{"param1": "valor1", "param2": "valor2"}}}}
 
 **crear_recordatorio**
-- Descripción: Crea un recordatorio o tarea
+- Descripción: ÚSALA SOLO cuando el usuario pida explícitamente crear un recordatorio, alarma o tarea. NO la uses para responder preguntas.
 - Parámetros:
-  * mensaje (string, requerido): El mensaje del recordatorio
-  * tiempo (string, opcional): Expresión temporal como "mañana a las 15:00", "en 2 horas", "el viernes"
-- Ejemplo: {{"function": "crear_recordatorio", "params": {{"mensaje": "Hacer ejercicio", "tiempo": "mañana a las 7am"}}}}
+  * mensaje (string, requerido): El contenido de lo que se debe recordar.
+  * tiempo (string, opcional): Cuándo recordarlo (ej: "mañana a las 15:00", "en 2 horas"). Si no se especifica, es una tarea pendiente.
+- Ejemplo: {{"function": "crear_recordatorio", "params": {{"mensaje": "Comprar leche", "tiempo": "en 1 hora"}}}}
 
 **listar_recordatorios**
 - Descripción: Lista los recordatorios pendientes

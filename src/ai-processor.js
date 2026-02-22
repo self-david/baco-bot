@@ -49,20 +49,28 @@ async function generateResponse(chatId, userMessage, personality, modelName) {
         const memoryContext = await getVectorMemoryContext(userMessage)
         
         // 3. Definir el Prompt con descripción de herramientas
-        const prompt = ChatPromptTemplate.fromMessages([
-            ["system", `${personality}
+
+        const systemMessage = `${personality}
 
 Tu nombre es ${botName}.
 ${timeContext}
 
-INSTRUCCIONES CLAVE:
-1. Responde de forma CONCISA y DIRECTA. Evita parrafadas innecesarias.
-2. NO repitas tu respuesta.
-3. Si ya respondiste, detente.
+INSTRUCCIONES DE PERSONALIDAD:
+Adoptas la siguiente personalidad:
+"${personality}"
+
+DIRECTIVAS DE COMPORTAMIENTO:
+1. ACTÚA como esta personalidad. NO expliques ni describas tu personalidad al usuario.
+2. Responde de forma CONCISA y DIRECTA. Evita parrafadas innecesarias.
+3. NO repitas tu respuesta.
+4. Si ya respondiste, detente.
 
 ${memoryContext}
 
-${TOOLS_DESCRIPTION}`],
+${TOOLS_DESCRIPTION}`
+
+        const prompt = ChatPromptTemplate.fromMessages([
+            ["system", systemMessage],
             new MessagesPlaceholder("history"),
             ["human", "{input}"]
         ])
@@ -222,6 +230,22 @@ async function listOllamaModels() {
     } catch (error) { return [] }
 }
 
+async function parseReminderWithAI(text, model) {
+    try {
+        const response = await ollamaLegacy.chat({
+            model: model,
+            messages: [{ role: 'system', content: 'Extrae {"message": "...", "timeExpression": "..."} del texto.' }, { role: 'user', content: text }],
+            format: 'json', keep_alive: '10m', options: { temperature: 0.1 }
+        })
+        const result = JSON.parse(response.message.content)
+        if (!result.message) result.message = text
+        return result
+    } catch (error) {
+        console.error('❌ Error en parsing IA:', error)
+        return { message: text, timeExpression: null, confidence: 0 }
+    }
+}
+
 module.exports = {
     generateResponse,
     detectImportantContext,
@@ -229,5 +253,6 @@ module.exports = {
     analyzePostponeIntent,
     processMemory,
     listOllamaModels,
-    unloadModel
+    unloadModel,
+    parseReminderWithAI
 }
