@@ -18,7 +18,7 @@ async function processCommand(message, chatId, client) {
     try {
         // Lista de comandos válidos para fuzzy search
         const validCommands = [
-            'nombre', 'personalidad', 'refinar', 'modelo',
+            'nombre', 'personalidad', 'refinar', 'modelo', 'apiurl',
             'whitelist', 'lista', 'w', 'l',
             'recordar', 'posponer',
             'tarea', 'tareas', 't',
@@ -70,6 +70,10 @@ async function processCommand(message, chatId, client) {
             case 'modelo':
                 if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
                 return await handleModelo(args)
+                
+            case 'apiurl':
+                if (!database.isAdmin(chatId)) return '⛔ Acceso denegado. Se requiere rol de administrador.'
+                return handleApiUrl(args)
                 
             case 'whitelist':
             case 'lista':
@@ -225,6 +229,22 @@ async function handleModelo(args) {
 
     database.setConfig('modelo', nuevoModelo)
     return `✅ Modelo cambiado a: *${nuevoModelo}*`
+}
+
+function handleApiUrl(args) {
+    if (args.length === 0) {
+        const urlActual = database.getConfig('api_url')
+        return `🔗 *Gestión de API URL*\n\nURL actual: *${urlActual || 'Por defecto (http://127.0.0.1:11434)'}*\n\nUsa /apiurl [url] para cambiar, o /apiurl default para restablecer.`
+    }
+    
+    const nuevaUrl = args[0]
+    if (nuevaUrl.toLowerCase() === 'default' || nuevaUrl.toLowerCase() === 'reset') {
+        database.setConfig('api_url', '')
+        return '✅ API URL restablecida a local por defecto.'
+    }
+    
+    database.setConfig('api_url', nuevaUrl)
+    return `✅ API URL cambiada a: *${nuevaUrl}*`
 }
 
 // ========== COMANDOS DE WHITELIST ==========
@@ -625,7 +645,8 @@ function showHelp(chatId) {
 /nombre [nombre] - Cambiar nombre del bot
 /personalidad [texto] - Cambiar personalidad
 /refinar [texto] - Ajustar personalidad
-/modelo [nombre] - Cambiar modelo de Ollama`
+/modelo [nombre] - Cambiar modelo de Ollama
+/apiurl [url] - Cambiar URL de API (Ollama/Web)`
     }
 
     return help

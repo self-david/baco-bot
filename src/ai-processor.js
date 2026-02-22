@@ -10,8 +10,11 @@ const { Ollama } = require('ollama') //  Mantener para funciones legacy
 const database = require('./database')
 const utils = require('./utils')
 
-// Cliente legacy para funciones auxiliares
-const ollamaLegacy = new Ollama({ host: 'http://127.0.0.1:11434' })
+// Función para obtener cliente legacy dinámico
+function getOllamaInstance() {
+    const customUrl = database.getConfig('api_url')
+    return new Ollama({ host: customUrl || 'http://127.0.0.1:11434' })
+}
 
 const OLLAMA_OPTIONS = {
     num_ctx: 4096,
@@ -24,8 +27,9 @@ const OLLAMA_OPTIONS = {
 async function generateResponse(chatId, userMessage, personality, modelName) {
     try {
         // 1. Configurar el modelo
+        const customUrl = database.getConfig('api_url')
         const chatModel = new ChatOllama({
-            baseUrl: 'http://127.0.0.1:11434',
+            baseUrl: customUrl || 'http://127.0.0.1:11434',
             model: modelName,
             temperature: 0.7,
             numCtx: 4096,
@@ -140,7 +144,8 @@ async function humanizeReminder(text, personality, model) {
             { role: 'system', content: `${personality}\n\nTU OBJETIVO: Tienes un recordatorio: "${text}".\n\nTU TAREA: Reescríbe lo como un ÚNICO mensaje de notificación que TÚ (el asistente) le envías al usuario.\n\nREGLAS:\n1. NO des opciones.\n2. NO uses listas.\n3. NO hables en primera persona como le usuario.\n4. Sé breve, directo y usa tu personalidad.\n5. El mensaje debe ser la notificación final.` },
             { role: 'user', content: 'Genera el mensaje.' }
         ]
-        const response = await ollamaLegacy.chat({ model: model, messages: prompt, keep_alive: '10m', options: OLLAMA_OPTIONS })
+        const ollamaClient = getOllamaInstance()
+        const response = await ollamaClient.chat({ model: model, messages: prompt, keep_alive: '10m', options: OLLAMA_OPTIONS })
         return response.message.content.trim().replace(/^["']|["']$/g, '').replace(/^(Opción \d:|Aquí tienes|Claro,|El mensaje es:)\s*/i, '')
     } catch (error) {
         console.error('❌ Error humanizando:', error)
@@ -155,7 +160,8 @@ async function analyzePostponeIntent(text, lastReminder, model) {
 
     const context = `Fecha: ${new Date().toLocaleDateString('es-MX')} ${new Date().toLocaleTimeString('es-MX')}\nRecordatorio: "${lastReminder.message}"\nMensaje: "${text}"`
     try {
-        const response = await ollamaLegacy.chat({
+        const ollamaClient = getOllamaInstance()
+        const response = await ollamaClient.chat({
             model: model,
             messages: [{ role: 'system', content: 'Eres un motor de inferencia temporal. Retorna SOLO JSON: {"isPostpone": true/false, "newDate": "YYYY-MM-DD HH:mm:ss"}.' }, { role: 'user', content: context }],
             format: 'json', keep_alive: '10m', options: OLLAMA_OPTIONS
@@ -193,7 +199,8 @@ async function processMemory(chatId, userMessage, assistantResponse, model) {
     ]
 
     try {
-        const response = await ollamaLegacy.chat({
+        const ollamaClient = getOllamaInstance()
+        const response = await ollamaClient.chat({
             model: model,
             messages: prompt,
             keep_alive: '10m',
@@ -218,21 +225,24 @@ async function processMemory(chatId, userMessage, assistantResponse, model) {
 async function unloadModel(modelName) {
     if (!modelName) return
     try {
-        await ollamaLegacy.chat({ model: modelName, messages: [], keep_alive: 0 })
+        const ollamaClient = getOllamaInstance()
+        await ollamaClient.chat({ model: modelName, messages: [], keep_alive: 0 })
         return true
     } catch (error) { return false }
 }
 
 async function listOllamaModels() {
     try {
-        const response = await ollamaLegacy.list()
+        const ollamaClient = getOllamaInstance()
+        const response = await ollamaClient.list()
         return response.models.map(m => m.name)
     } catch (error) { return [] }
 }
 
 async function parseReminderWithAI(text, model) {
     try {
-        const response = await ollamaLegacy.chat({
+        const ollamaClient = getOllamaInstance()
+        const response = await ollamaClient.chat({
             model: model,
             messages: [{ role: 'system', content: 'Extrae {"message": "...", "timeExpression": "..."} del texto.' }, { role: 'user', content: text }],
             format: 'json', keep_alive: '10m', options: { temperature: 0.1 }
