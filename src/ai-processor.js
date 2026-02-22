@@ -21,9 +21,10 @@ const customFetch = async (url, options) => {
         try { requestBody = JSON.parse(options.body); } catch(e){}
     }
     const isStreamRequested = requestBody.stream === true;
+    const customUrl = database.getConfig('api_url')
     
-    // Si es nuestra API remota
-    if (url.toString().includes('davidga.dev') || url.toString().includes('api.miweb.com')) {
+    // Si tenemos una URL personalizada configurada, aplicamos la corrección de formato
+    if (customUrl && customUrl.length > 5) {
         // Fix para comando /modelo (listar tags)
         if (url.toString().endsWith('/api/tags')) {
             return new Response(JSON.stringify({ models: [{ name: 'remoto_por_defecto' }, { name: 'llama-3.1-70b-versatile' }, { name: 'gemma3:1b' }, { name: 'mixtral-8x7b-32768' }] }), { headers: { 'Content-Type': 'application/json' }});
